@@ -1,0 +1,211 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AmazonMQ (RabbitMQ) CloudWatch Alarms
+Parameters:
+  SNSTopicArn:
+    Type: String
+    Description: SNS Topic ARN for alarm notifications
+    AllowedPattern: arn:aws:sns:[a-z0-9-]+:[0-9]{12}:.+
+    ConstraintDescription: Must be a valid SNS Topic ARN
+Resources:
+  AmazonMQRabbitMQInfoAlarm0:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-SystemCpuUtilization-Info
+      AlarmDescription: RabbitMQ CPU使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(SystemCpuUtilization) FROM "AWS/AmazonMQ" WHERE Broker
+          = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQWarningAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-SystemCpuUtilization-Warning
+      AlarmDescription: RabbitMQ CPU使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(SystemCpuUtilization) FROM "AWS/AmazonMQ" WHERE Broker
+          = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQCriticalAlarm2:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-SystemCpuUtilization-Critical
+      AlarmDescription: RabbitMQ CPU使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(SystemCpuUtilization) FROM "AWS/AmazonMQ" WHERE Broker
+          = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQInfoAlarm3:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-RabbitMQMemUsed-Info
+      AlarmDescription: RabbitMQ内存使用率百分比
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RabbitMQMemUsed) FROM "AWS/AmazonMQ" WHERE Broker =
+          'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQWarningAlarm4:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-RabbitMQMemUsed-Warning
+      AlarmDescription: RabbitMQ内存使用率百分比
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RabbitMQMemUsed) FROM "AWS/AmazonMQ" WHERE Broker =
+          'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQCriticalAlarm5:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-RabbitMQMemUsed-Critical
+      AlarmDescription: RabbitMQ内存使用率百分比
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RabbitMQMemUsed) FROM "AWS/AmazonMQ" WHERE Broker =
+          'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQWarningAlarm6:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-RabbitMQDiskFree-Warning
+      AlarmDescription: RabbitMQ可用磁盘空间 - 低于2GB (2GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RabbitMQDiskFree) FROM "AWS/AmazonMQ" WHERE Broker
+          = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 2147483648
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQCriticalAlarm7:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-RabbitMQDiskFree-Critical
+      AlarmDescription: RabbitMQ可用磁盘空间 - 低于1GB (1GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RabbitMQDiskFree) FROM "AWS/AmazonMQ" WHERE Broker
+          = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 1073741824
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQWarningAlarm8:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-MessageCount-Warning
+      AlarmDescription: RabbitMQ消息总数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(MessageCount) FROM "AWS/AmazonMQ" WHERE Broker = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 100000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQCriticalAlarm9:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-MessageCount-Critical
+      AlarmDescription: RabbitMQ消息总数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(MessageCount) FROM "AWS/AmazonMQ" WHERE Broker = 'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 500000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQWarningAlarm10:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-ConnectionCount-Warning
+      AlarmDescription: RabbitMQ连接数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ConnectionCount) FROM "AWS/AmazonMQ" WHERE Broker =
+          'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  AmazonMQRabbitMQCriticalAlarm11:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-AmazonMQ-b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62-ConnectionCount-Critical
+      AlarmDescription: RabbitMQ连接数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ConnectionCount) FROM "AWS/AmazonMQ" WHERE Broker =
+          'b-ff84e056-cd78-43eb-ad1a-0e72ffde9b62'
+        Period: 300
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn

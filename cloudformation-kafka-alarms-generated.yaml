@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MSK (Kafka) CloudWatch Alarms
+Parameters:
+  SNSTopicArn:
+    Type: String
+    Description: SNS Topic ARN for alarm notifications
+    AllowedPattern: arn:aws:sns:[a-z0-9-]+:[0-9]{12}:.+
+    ConstraintDescription: Must be a valid SNS Topic ARN
+Resources:
+  MSKKafkaInfoAlarm0:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-CpuUser-Info
+      AlarmDescription: Kafka CPU用户空间使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(CpuUser) FROM "AWS/Kafka" WHERE "Cluster Name" = 'publicMSK'
+        Period: 300
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-CpuUser-Warning
+      AlarmDescription: Kafka CPU用户空间使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(CpuUser) FROM "AWS/Kafka" WHERE "Cluster Name" = 'publicMSK'
+        Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm2:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-CpuUser-Critical
+      AlarmDescription: Kafka CPU用户空间使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(CpuUser) FROM "AWS/Kafka" WHERE "Cluster Name" = 'publicMSK'
+        Period: 300
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaInfoAlarm3:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-MemoryUsed-Info
+      AlarmDescription: Kafka内存使用 - 超过6GB (6GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(MemoryUsed) FROM "AWS/Kafka" WHERE "Cluster Name" =
+          'publicMSK'
+        Period: 300
+      Threshold: 6442450944
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm4:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-MemoryUsed-Warning
+      AlarmDescription: Kafka内存使用 - 超过7GB (7GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(MemoryUsed) FROM "AWS/Kafka" WHERE "Cluster Name" =
+          'publicMSK'
+        Period: 300
+      Threshold: 7516192768
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm5:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-MemoryUsed-Critical
+      AlarmDescription: Kafka内存使用 - 超过8GB (8GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(MemoryUsed) FROM "AWS/Kafka" WHERE "Cluster Name" =
+          'publicMSK'
+        Period: 300
+      Threshold: 8589934592
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaInfoAlarm6:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-RootDiskUsed-Info
+      AlarmDescription: Kafka根磁盘使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RootDiskUsed) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm7:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-RootDiskUsed-Warning
+      AlarmDescription: Kafka根磁盘使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RootDiskUsed) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm8:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-RootDiskUsed-Critical
+      AlarmDescription: Kafka根磁盘使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RootDiskUsed) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaInfoAlarm9:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-KafkaDataLogsDiskUsed-Info
+      AlarmDescription: Kafka数据磁盘使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(KafkaDataLogsDiskUsed) FROM "AWS/Kafka" WHERE "Cluster
+          Name" = 'publicMSK'
+        Period: 300
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm10:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-KafkaDataLogsDiskUsed-Warning
+      AlarmDescription: Kafka数据磁盘使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(KafkaDataLogsDiskUsed) FROM "AWS/Kafka" WHERE "Cluster
+          Name" = 'publicMSK'
+        Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm11:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-KafkaDataLogsDiskUsed-Critical
+      AlarmDescription: Kafka数据磁盘使用率
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(KafkaDataLogsDiskUsed) FROM "AWS/Kafka" WHERE "Cluster
+          Name" = 'publicMSK'
+        Period: 300
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm12:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-PartitionCount-Warning
+      AlarmDescription: 分区数量
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(PartitionCount) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm13:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-PartitionCount-Critical
+      AlarmDescription: 分区数量
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(PartitionCount) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 1500
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm14:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-GlobalTopicCount-Warning
+      AlarmDescription: Topic总数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(GlobalTopicCount) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm15:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-GlobalTopicCount-Critical
+      AlarmDescription: Topic总数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(GlobalTopicCount) FROM "AWS/Kafka" WHERE "Cluster Name"
+          = 'publicMSK'
+        Period: 300
+      Threshold: 800
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm16:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-UnderReplicatedPartitions-Warning
+      AlarmDescription: 未充分备份的分区数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(UnderReplicatedPartitions) FROM "AWS/Kafka" WHERE "Cluster
+          Name" = 'publicMSK'
+        Period: 300
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm17:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-UnderReplicatedPartitions-Critical
+      AlarmDescription: 未充分备份的分区数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(UnderReplicatedPartitions) FROM "AWS/Kafka" WHERE "Cluster
+          Name" = 'publicMSK'
+        Period: 300
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaWarningAlarm18:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-ZooKeeperRequestLatencyMsMean-Warning
+      AlarmDescription: ZooKeeper请求平均延迟
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ZooKeeperRequestLatencyMsMean) FROM "AWS/Kafka" WHERE
+          "Cluster Name" = 'publicMSK'
+        Period: 300
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  MSKKafkaCriticalAlarm19:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-MSK-publicMSK-ZooKeeperRequestLatencyMsMean-Critical
+      AlarmDescription: ZooKeeper请求平均延迟
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ZooKeeperRequestLatencyMsMean) FROM "AWS/Kafka" WHERE
+          "Cluster Name" = 'publicMSK'
+        Period: 300
+      Threshold: 200
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn

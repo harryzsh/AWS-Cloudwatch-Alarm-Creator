@@ -1,0 +1,626 @@
+services:
+  opensearch:
+    name: OpenSearch
+    namespace: AWS/ES
+    dimension_name: DomainName
+    alarms:
+      - metric: Shards.unassigned
+        severity: Warning
+        threshold: 1
+        operator: GreaterThanOrEqualToThreshold
+        description: 未分配分片数 - 表示集群健康问题
+      
+      - metric: Shards.unassigned
+        severity: Critical
+        threshold: 5
+        operator: GreaterThanOrEqualToThreshold
+        description: 未分配分片数 - 表示集群健康问题
+      
+      - metric: Shards.activePrimary
+        severity: Warning
+        threshold: 900
+        operator: GreaterThanThreshold
+        description: 集群主分片数量 - 默认单节点分片1000
+      
+      - metric: Shards.activePrimary
+        severity: Critical
+        threshold: 950
+        operator: GreaterThanThreshold
+        description: 集群主分片数量 - 默认单节点分片1000
+      
+      - metric: ClusterStatus.green
+        severity: Critical
+        threshold: 1
+        operator: LessThanThreshold
+        description: 集群状态 - 绿色表示健康
+      
+      - metric: ClusterStatus.yellow
+        severity: Warning
+        threshold: 1
+        operator: GreaterThanThreshold
+        description: 集群状态 - 黄色表示部分不可用
+      
+      - metric: ClusterStatus.red
+        severity: Critical
+        threshold: 1
+        operator: GreaterThanThreshold
+        description: 集群状态 - 红色表示不可用
+      
+      - metric: CPUUtilization
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: CPU使用率
+      
+      - metric: CPUUtilization
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: CPU使用率
+      
+      - metric: CPUUtilization
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: CPU使用率
+      
+      - metric: JVMMemoryPressure
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: JVM内存压力
+      
+      - metric: JVMMemoryPressure
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: JVM内存压力
+      
+      - metric: JVMMemoryPressure
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: JVM内存压力
+      
+      - metric: MasterCPUUtilization
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: 主节点CPU使用率
+      
+      - metric: MasterCPUUtilization
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: 主节点CPU使用率
+      
+      - metric: MasterJVMMemoryPressure
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: 主节点JVM内存压力
+      
+      - metric: FreeStorageSpace
+        severity: Warning
+        threshold: 20480
+        operator: LessThanThreshold
+        description: 可用存储空间 - 低于20GB告警 (20GB in MB)
+      
+      - metric: FreeStorageSpace
+        severity: Critical
+        threshold: 10240
+        operator: LessThanThreshold
+        description: 可用存储空间 - 低于10GB告警 (10GB in MB)
+
+  kafka:
+    name: MSK (Kafka)
+    namespace: AWS/Kafka
+    dimension_name: Cluster Name
+    alarms:
+      - metric: CpuUser
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: Kafka CPU用户空间使用率
+      
+      - metric: CpuUser
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: Kafka CPU用户空间使用率
+      
+      - metric: CpuUser
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: Kafka CPU用户空间使用率
+      
+      - metric: MemoryUsed
+        severity: Info
+        threshold: 6442450944
+        operator: GreaterThanThreshold
+        description: Kafka内存使用 - 超过6GB (6GB in bytes)
+      
+      - metric: MemoryUsed
+        severity: Warning
+        threshold: 7516192768
+        operator: GreaterThanThreshold
+        description: Kafka内存使用 - 超过7GB (7GB in bytes)
+      
+      - metric: MemoryUsed
+        severity: Critical
+        threshold: 8589934592
+        operator: GreaterThanThreshold
+        description: Kafka内存使用 - 超过8GB (8GB in bytes)
+      
+      - metric: RootDiskUsed
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: Kafka根磁盘使用率
+      
+      - metric: RootDiskUsed
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: Kafka根磁盘使用率
+      
+      - metric: RootDiskUsed
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: Kafka根磁盘使用率
+      
+      - metric: KafkaDataLogsDiskUsed
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: Kafka数据磁盘使用率
+      
+      - metric: KafkaDataLogsDiskUsed
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: Kafka数据磁盘使用率
+      
+      - metric: KafkaDataLogsDiskUsed
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: Kafka数据磁盘使用率
+      
+      - metric: PartitionCount
+        severity: Warning
+        threshold: 1000
+        operator: GreaterThanThreshold
+        description: 分区数量
+      
+      - metric: PartitionCount
+        severity: Critical
+        threshold: 1500
+        operator: GreaterThanThreshold
+        description: 分区数量
+      
+      - metric: GlobalTopicCount
+        severity: Warning
+        threshold: 500
+        operator: GreaterThanThreshold
+        description: Topic总数
+      
+      - metric: GlobalTopicCount
+        severity: Critical
+        threshold: 800
+        operator: GreaterThanThreshold
+        description: Topic总数
+      
+      - metric: UnderReplicatedPartitions
+        severity: Warning
+        threshold: 10
+        operator: GreaterThanThreshold
+        description: 未充分备份的分区数
+      
+      - metric: UnderReplicatedPartitions
+        severity: Critical
+        threshold: 50
+        operator: GreaterThanThreshold
+        description: 未充分备份的分区数
+      
+      - metric: ZooKeeperRequestLatencyMsMean
+        severity: Warning
+        threshold: 100
+        operator: GreaterThanThreshold
+        description: ZooKeeper请求平均延迟
+      
+      - metric: ZooKeeperRequestLatencyMsMean
+        severity: Critical
+        threshold: 200
+        operator: GreaterThanThreshold
+        description: ZooKeeper请求平均延迟
+
+  rabbitmq:
+    name: AmazonMQ (RabbitMQ)
+    namespace: AWS/AmazonMQ
+    dimension_name: Broker
+    alarms:
+      - metric: SystemCpuUtilization
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: RabbitMQ CPU使用率
+      
+      - metric: SystemCpuUtilization
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: RabbitMQ CPU使用率
+      
+      - metric: SystemCpuUtilization
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: RabbitMQ CPU使用率
+      
+      - metric: RabbitMQMemUsed
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: RabbitMQ内存使用率百分比
+      
+      - metric: RabbitMQMemUsed
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: RabbitMQ内存使用率百分比
+      
+      - metric: RabbitMQMemUsed
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: RabbitMQ内存使用率百分比
+      
+      - metric: RabbitMQDiskFree
+        severity: Warning
+        threshold: 2147483648
+        operator: LessThanThreshold
+        description: RabbitMQ可用磁盘空间 - 低于2GB (2GB in bytes)
+      
+      - metric: RabbitMQDiskFree
+        severity: Critical
+        threshold: 1073741824
+        operator: LessThanThreshold
+        description: RabbitMQ可用磁盘空间 - 低于1GB (1GB in bytes)
+      
+      - metric: MessageCount
+        severity: Warning
+        threshold: 100000
+        operator: GreaterThanThreshold
+        description: RabbitMQ消息总数
+      
+      - metric: MessageCount
+        severity: Critical
+        threshold: 500000
+        operator: GreaterThanThreshold
+        description: RabbitMQ消息总数
+      
+      - metric: ConnectionCount
+        severity: Warning
+        threshold: 1000
+        operator: GreaterThanThreshold
+        description: RabbitMQ连接数
+      
+      - metric: ConnectionCount
+        severity: Critical
+        threshold: 2000
+        operator: GreaterThanThreshold
+        description: RabbitMQ连接数
+
+  waf:
+    name: AWS WAF
+    namespace: AWS/WAFV2
+    dimension_name: WebACL
+    extra_dimensions:
+      - name: Region
+        parameter: Region
+      - name: Rule
+        value: ALL
+    alarms:
+      - metric: BlockedRequests
+        severity: Warning
+        threshold: 50
+        operator: GreaterThanThreshold
+        description: WAF触发拦截机制 - 检测到异常流量被拦截
+        statistic: Sum
+      
+      - metric: AllowedRequests
+        severity: Info
+        threshold: 10000
+        operator: GreaterThanThreshold
+        description: WAF允许的请求数 - 监控正常流量
+        statistic: Sum
+
+  docdb:
+    name: DocumentDB
+    namespace: AWS/DocDB
+    dimension_name: DBClusterIdentifier
+    alarms:
+      - metric: CPUUtilization
+        severity: Info
+        threshold: 70
+        operator: GreaterThanThreshold
+        description: DocumentDB CPU使用率
+      
+      - metric: CPUUtilization
+        severity: Warning
+        threshold: 80
+        operator: GreaterThanThreshold
+        description: DocumentDB CPU使用率
+      
+      - metric: CPUUtilization
+        severity: Critical
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: DocumentDB CPU使用率
+      
+      - metric: DatabaseConnections
+        severity: Info
+        threshold: 100
+        operator: GreaterThanThreshold
+        description: DocumentDB连接数
+      
+      - metric: DatabaseConnections
+        severity: Warning
+        threshold: 200
+        operator: GreaterThanThreshold
+        description: DocumentDB连接数
+      
+      - metric: DatabaseConnections
+        severity: Critical
+        threshold: 300
+        operator: GreaterThanThreshold
+        description: DocumentDB连接数
+      
+      - metric: FreeableMemory
+        severity: Info
+        threshold: 1073741824
+        operator: LessThanThreshold
+        description: DocumentDB可用内存 - 低于1GB (1GB in bytes)
+      
+      - metric: FreeableMemory
+        severity: Warning
+        threshold: 536870912
+        operator: LessThanThreshold
+        description: DocumentDB可用内存 - 低于512MB (512MB in bytes)
+      
+      - metric: FreeableMemory
+        severity: Critical
+        threshold: 268435456
+        operator: LessThanThreshold
+        description: DocumentDB可用内存 - 低于256MB (256MB in bytes)
+      
+      - metric: ReadIOPS
+        severity: Warning
+        threshold: 5000
+        operator: GreaterThanThreshold
+        description: DocumentDB读IOPS
+      
+      - metric: ReadIOPS
+        severity: Critical
+        threshold: 10000
+        operator: GreaterThanThreshold
+        description: DocumentDB读IOPS
+      
+      - metric: WriteIOPS
+        severity: Warning
+        threshold: 5000
+        operator: GreaterThanThreshold
+        description: DocumentDB写IOPS
+      
+      - metric: WriteIOPS
+        severity: Critical
+        threshold: 10000
+        operator: GreaterThanThreshold
+        description: DocumentDB写IOPS
+      
+      - metric: ReadLatency
+        severity: Warning
+        threshold: 0.01
+        operator: GreaterThanThreshold
+        description: DocumentDB读延迟 - 超过10ms
+      
+      - metric: ReadLatency
+        severity: Critical
+        threshold: 0.02
+        operator: GreaterThanThreshold
+        description: DocumentDB读延迟 - 超过20ms
+      
+      - metric: WriteLatency
+        severity: Warning
+        threshold: 0.01
+        operator: GreaterThanThreshold
+        description: DocumentDB写延迟 - 超过10ms
+      
+      - metric: WriteLatency
+        severity: Critical
+        threshold: 0.02
+        operator: GreaterThanThreshold
+        description: DocumentDB写延迟 - 超过20ms
+      
+      - metric: DBInstanceReplicaLag
+        severity: Warning
+        threshold: 1000
+        operator: GreaterThanThreshold
+        description: DocumentDB复制延迟 - 超过1秒
+      
+      - metric: DBInstanceReplicaLag
+        severity: Critical
+        threshold: 5000
+        operator: GreaterThanThreshold
+        description: DocumentDB复制延迟 - 超过5秒
+      
+      - metric: VolumeBytesUsed
+        severity: Info
+        threshold: 107374182400
+        operator: GreaterThanThreshold
+        description: DocumentDB存储使用量 - 超过100GB (100GB in bytes)
+      
+      - metric: VolumeBytesUsed
+        severity: Warning
+        threshold: 161061273600
+        operator: GreaterThanThreshold
+        description: DocumentDB存储使用量 - 超过150GB (150GB in bytes)
+      
+      - metric: BufferCacheHitRatio
+        severity: Warning
+        threshold: 95
+        operator: LessThanThreshold
+        description: DocumentDB缓冲区缓存命中率 - 低于95%表示内存不足
+      
+      - metric: IndexBufferCacheHitRatio
+        severity: Warning
+        threshold: 95
+        operator: LessThanThreshold
+        description: DocumentDB索引缓冲区缓存命中率 - 低于95%表示内存不足
+      
+      - metric: DatabaseCursors
+        severity: Warning
+        threshold: 4000
+        operator: GreaterThanThreshold
+        description: DocumentDB游标数量 - 接近最大值4560
+      
+      - metric: DatabaseCursorsTimedOut
+        severity: Info
+        threshold: 10
+        operator: GreaterThanThreshold
+        description: DocumentDB游标超时数量 - 应用程序未正确关闭游标
+        statistic: Sum
+      
+      - metric: DBClusterReplicaLagMaximum
+        severity: Critical
+        threshold: 5000
+        operator: GreaterThanThreshold
+        description: DocumentDB集群最大复制延迟 - 超过5秒
+
+  alb:
+    name: Application Load Balancer
+    namespace: AWS/ApplicationELB
+    dimension_name: LoadBalancer
+    alarms:
+      - metric: ActiveConnectionCount
+        severity: Warning
+        threshold: 10000
+        operator: GreaterThanThreshold
+        description: ALB活跃连接数
+      
+      - metric: ActiveConnectionCount
+        severity: Critical
+        threshold: 20000
+        operator: GreaterThanThreshold
+        description: ALB活跃连接数
+      
+      - metric: HTTPCode_Target_5XX_Count
+        severity: Warning
+        threshold: 100
+        operator: GreaterThanThreshold
+        description: ALB目标5XX错误
+        statistic: Sum
+      
+      - metric: HTTPCode_Target_5XX_Count
+        severity: Critical
+        threshold: 500
+        operator: GreaterThanThreshold
+        description: ALB目标5XX错误
+        statistic: Sum
+      
+      - metric: UnHealthyHostCount
+        severity: Warning
+        threshold: 1
+        operator: GreaterThanOrEqualToThreshold
+        description: ALB不健康主机数
+      
+      - metric: UnHealthyHostCount
+        severity: Critical
+        threshold: 2
+        operator: GreaterThanOrEqualToThreshold
+        description: ALB不健康主机数
+      
+      - metric: TargetResponseTime
+        severity: Warning
+        threshold: 1
+        operator: GreaterThanThreshold
+        description: ALB目标响应时间 - 超过1秒
+      
+      - metric: TargetResponseTime
+        severity: Critical
+        threshold: 3
+        operator: GreaterThanThreshold
+        description: ALB目标响应时间 - 超过3秒
+      
+      - metric: ProcessedBytes
+        severity: Warning
+        threshold: 1073741824
+        operator: GreaterThanThreshold
+        description: ALB处理字节数 - 超过1GB (1GB in bytes)
+        statistic: Sum
+      
+      - metric: ProcessedBytes
+        severity: Critical
+        threshold: 5368709120
+        operator: GreaterThanThreshold
+        description: ALB处理字节数 - 超过5GB (5GB in bytes)
+        statistic: Sum
+      
+      - metric: RejectedConnectionCount
+        severity: Warning
+        threshold: 10
+        operator: GreaterThanThreshold
+        description: ALB拒绝连接数
+        statistic: Sum
+      
+      - metric: RejectedConnectionCount
+        severity: Critical
+        threshold: 50
+        operator: GreaterThanThreshold
+        description: ALB拒绝连接数
+        statistic: Sum
+      
+      - metric: HTTPCode_ELB_5XX_Count
+        severity: Critical
+        threshold: 10
+        operator: GreaterThanThreshold
+        description: ALB自身5XX错误 - 负载均衡器内部错误
+        statistic: Sum
+      
+      - metric: HTTPCode_ELB_4XX_Count
+        severity: Warning
+        threshold: 100
+        operator: GreaterThanThreshold
+        description: ALB自身4XX错误 - 客户端请求格式错误
+        statistic: Sum
+      
+      - metric: TargetConnectionErrorCount
+        severity: Warning
+        threshold: 10
+        operator: GreaterThanThreshold
+        description: ALB目标连接错误 - 无法连接到后端目标
+        statistic: Sum
+      
+      - metric: TargetConnectionErrorCount
+        severity: Critical
+        threshold: 50
+        operator: GreaterThanThreshold
+        description: ALB目标连接错误 - 无法连接到后端目标
+        statistic: Sum
+      
+      - metric: HealthyHostCount
+        severity: Critical
+        threshold: 1
+        operator: LessThanThreshold
+        description: ALB健康主机数 - 少于1个健康目标
+        statistic: Minimum
+      
+      - metric: TargetTLSNegotiationErrorCount
+        severity: Warning
+        threshold: 10
+        operator: GreaterThanThreshold
+        description: ALB目标TLS协商错误 - SSL/TLS握手失败
+        statistic: Sum

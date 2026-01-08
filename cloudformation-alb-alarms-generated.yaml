@@ -1,0 +1,315 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Application Load Balancer CloudWatch Alarms
+Parameters:
+  SNSTopicArn:
+    Type: String
+    Description: SNS Topic ARN for alarm notifications
+    AllowedPattern: arn:aws:sns:[a-z0-9-]+:[0-9]{12}:.+
+    ConstraintDescription: Must be a valid SNS Topic ARN
+Resources:
+  ApplicationLoadBalancerWarningAlarm0:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-ActiveConnectionCount-Warning
+      AlarmDescription: ALB活跃连接数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ActiveConnectionCount) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 10000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-ActiveConnectionCount-Critical
+      AlarmDescription: ALB活跃连接数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ActiveConnectionCount) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 20000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm2:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-HTTPCode_Target_5XX_Count-Warning
+      AlarmDescription: ALB目标5XX错误
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(HTTPCode_Target_5XX_Count) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm3:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-HTTPCode_Target_5XX_Count-Critical
+      AlarmDescription: ALB目标5XX错误
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(HTTPCode_Target_5XX_Count) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm4:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-UnHealthyHostCount-Warning
+      AlarmDescription: ALB不健康主机数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(UnHealthyHostCount) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm5:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-UnHealthyHostCount-Critical
+      AlarmDescription: ALB不健康主机数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(UnHealthyHostCount) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 2
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm6:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-TargetResponseTime-Warning
+      AlarmDescription: ALB目标响应时间 - 超过1秒
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(TargetResponseTime) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm7:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-TargetResponseTime-Critical
+      AlarmDescription: ALB目标响应时间 - 超过3秒
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(TargetResponseTime) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm8:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-ProcessedBytes-Warning
+      AlarmDescription: ALB处理字节数 - 超过1GB (1GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ProcessedBytes) FROM "AWS/ApplicationELB" WHERE LoadBalancer
+          = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 1073741824
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm9:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-ProcessedBytes-Critical
+      AlarmDescription: ALB处理字节数 - 超过5GB (5GB in bytes)
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(ProcessedBytes) FROM "AWS/ApplicationELB" WHERE LoadBalancer
+          = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 5368709120
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm10:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-RejectedConnectionCount-Warning
+      AlarmDescription: ALB拒绝连接数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RejectedConnectionCount) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm11:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-RejectedConnectionCount-Critical
+      AlarmDescription: ALB拒绝连接数
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(RejectedConnectionCount) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm12:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-HTTPCode_ELB_5XX_Count-Critical
+      AlarmDescription: ALB自身5XX错误 - 负载均衡器内部错误
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(HTTPCode_ELB_5XX_Count) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm13:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-HTTPCode_ELB_4XX_Count-Warning
+      AlarmDescription: ALB自身4XX错误 - 客户端请求格式错误
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(HTTPCode_ELB_4XX_Count) FROM "AWS/ApplicationELB" WHERE
+          LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm14:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-TargetConnectionErrorCount-Warning
+      AlarmDescription: ALB目标连接错误 - 无法连接到后端目标
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(TargetConnectionErrorCount) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm15:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-TargetConnectionErrorCount-Critical
+      AlarmDescription: ALB目标连接错误 - 无法连接到后端目标
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(TargetConnectionErrorCount) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerCriticalAlarm16:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-HealthyHostCount-Critical
+      AlarmDescription: ALB健康主机数 - 少于1个健康目标
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(HealthyHostCount) FROM "AWS/ApplicationELB" WHERE LoadBalancer
+          = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
+  ApplicationLoadBalancerWarningAlarm17:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EM-SNC-CLOUD-ApplicationLoadBalancer-app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790-TargetTLSNegotiationErrorCount-Warning
+      AlarmDescription: ALB目标TLS协商错误 - SSL/TLS握手失败
+      Metrics:
+      - Id: m1
+        ReturnData: true
+        Expression: SELECT max(TargetTLSNegotiationErrorCount) FROM "AWS/ApplicationELB"
+          WHERE LoadBalancer = 'app/k8s-dify-difydev-9a5ab6edcf/040926690cc4c790'
+        Period: 300
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: SNSTopicArn
