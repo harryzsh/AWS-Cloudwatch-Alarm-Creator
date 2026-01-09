@@ -145,58 +145,9 @@ python deploy-cloudwatch-alarms.py --mode resource-based \
 | **RabbitMQ** | Resource | 12/broker | CPU, Memory, Messages, Connections |
 | **WAF** | Resource | 2/WebACL | Blocked/Allowed Requests |
 
+**📖 [View Complete Metrics Reference](METRICS_REFERENCE.md)** - Detailed thresholds, descriptions, and AWS recommendations for all metrics.
+
 **All metrics verified against AWS official documentation**
-
-<details>
-<summary><b>View Detailed Metrics</b></summary>
-
-### EC2 (11 alarms)
-- CPUUtilization: Info (85%), Warning (90%), Critical (95%)
-- NetworkIn/Out: Info (150MB), Warning (300MB)
-- StatusCheckFailed: Critical (≥ 1)
-- StatusCheckFailed_System: Critical (≥ 1)
-- StatusCheckFailed_Instance: Critical (≥ 1)
-- StatusCheckFailed_AttachedEBS: Critical (≥ 1)
-
-### RDS (25 alarms)
-- DatabaseConnections: Info (100), Warning (200), Critical (300)
-- CPUUtilization: Info (70%), Warning (80%), Critical (90%)
-- FreeableMemory: Info (1GB), Warning (512MB), Critical (256MB)
-- FreeStorageSpace: Info (10GB), Warning (5GB), Critical (2GB)
-- ReadIOPS/WriteIOPS: Warning (10000), Critical (20000)
-- ReadLatency/WriteLatency: Warning (10ms), Critical (20ms)
-- ReplicaLag: Warning (30s), Critical (60s)
-- DiskQueueDepth: Warning (10), Critical (20)
-- BurstBalance: Warning (< 20%)
-
-### DocumentDB (27 alarms)
-- CPUUtilization: Info (70%), Warning (80%), Critical (90%)
-- DatabaseConnections: Info (100), Warning (200), Critical (300)
-- FreeableMemory: Info (1GB), Warning (512MB), Critical (256MB)
-- ReadIOPS/WriteIOPS: Warning (5000), Critical (10000)
-- ReadLatency/WriteLatency: Warning (10ms), Critical (20ms)
-- DBInstanceReplicaLag: Warning (1s), Critical (5s)
-- VolumeBytesUsed: Info (100GB), Warning (150GB)
-- BufferCacheHitRatio: Warning (< 95%)
-- IndexBufferCacheHitRatio: Warning (< 95%)
-- DatabaseCursors: Warning (> 4000)
-- DatabaseCursorsTimedOut: Info (> 10)
-- DBClusterReplicaLagMaximum: Critical (> 5s)
-
-### ALB (18 alarms)
-- ActiveConnectionCount: Warning (10000), Critical (20000)
-- HTTPCode_Target_5XX_Count: Warning (100), Critical (500)
-- HTTPCode_ELB_5XX_Count: Critical (10)
-- HTTPCode_ELB_4XX_Count: Warning (100)
-- UnHealthyHostCount: Warning (≥ 1), Critical (≥ 2)
-- HealthyHostCount: Critical (< 1)
-- TargetResponseTime: Warning (1s), Critical (3s)
-- TargetConnectionErrorCount: Warning (10), Critical (50)
-- TargetTLSNegotiationErrorCount: Warning (10)
-- ProcessedBytes: Warning (1GB), Critical (5GB)
-- RejectedConnectionCount: Warning (10), Critical (50)
-
-</details>
 
 ---
 
