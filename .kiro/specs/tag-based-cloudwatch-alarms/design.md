@@ -1,229 +1,173 @@
-# Design Document: Tag-Based CloudWatch Alarms Implementation
+# Design Document: CloudWatch Alarms - Production Monitoring System
 
 ## Overview
 
-This design implements a hybrid CloudWatch alarm deployment system that leverages AWS's tag-based alarm capabilities where supported, and falls back to resource-based alarms for services that don't support tags. The system reduces alarm count from thousands to hundreds while maintaining comprehensive monitoring coverage.
+Production-grade CloudWatch alarm deployment system using hybrid architecture optimized for AWS best practices. Combines tag-based alarms (for automatic scaling) with resource-based alarms (for specialized metrics).
 
-### Key Benefits
-
-- **Reduced Alarm Count**: 162 tag-based alarms instead of thousands of individual alarms
-- **Automatic Scaling**: New resources with matching tags are automatically monitored
-- **Simplified Management**: 11 stacks instead of 500+ stacks
-- **Cost Effective**: Fewer alarms = lower CloudWatch costs
-- **Maintainable**: Clear separation between tag-based and resource-based services
-
-## Architecture
-
-### High-Level Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Deployment Script                         │
-│                  (deploy-alarms-v2.py)                       │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
-        ▼                             ▼
-┌───────────────────┐         ┌──────────────────┐
-│  Tag-Based Mode   │         │ Resource-Based   │
-│   (7 services)    │         │  Mode (4 svcs)   │
-└────────┬──────────┘         └────────┬─────────┘
-         │                              │
-         ▼                              ▼
-┌─────────────────────┐       ┌──────────────────────┐
-│ Static CloudFormation│       │ CDK Template Generator│
-│    Templates         │       │  (Dynamic)            │
-└────────┬────────────┘       └────────┬─────────────┘
-         │                              │
-         └──────────────┬───────────────┘
-                        ▼
-              ┌──────────────────┐
-              │  CloudFormation  │
-              │   (11 Stacks)    │
-              └──────────────────┘
-                        │
-                        ▼
-              ┌──────────────────┐
-              │  CloudWatch      │
-              │   Alarms         │
-              └──────────────────┘
-```
-
-### Stack Architecture
+### Current Architecture (January 2026)
 
 ```
 Tag-Based Stack (1):
-└─ tag-based-alarms        (162 alarms total)
-   ├─ EC2 alarms           (8 alarms)
-   ├─ RDS MySQL alarms     (21 alarms)
-   ├─ RDS PostgreSQL alarms(30 alarms)
-   ├─ Redis alarms         (27 alarms)
-   ├─ DocumentDB alarms    (49 alarms)
-   ├─ EFS alarms           (14 alarms)
-   └─ ALB alarms           (13 alarms)
+└─ 64 alarms for EC2, RDS, Redis, EFS
+   ├─ EC2: 11 alarms (CPU, Network, Status Checks)
+   ├─ RDS: 25 alarms (CPU, Memory, Storage, IOPS, Latency, I/O Queue)
+   ├─ Redis: 19 alarms (CPU, Memory, Connections, Evictions, Cache Hit)
+   └─ EFS: 8 alarms (Connections, IO Limit, Burst Credits)
 
-Resource-Based Stacks (4):
-├─ opensearch-alarms       (N × 17 alarms)
-├─ kafka-alarms            (N × 21 alarms)
-├─ rabbitmq-alarms         (N × 12 alarms)
-└─ waf-alarms              (N × 2 alarms)
-
-Total: 5 stacks (1 tag-based + 4 resource-based)
+Resource-Based Stacks (6):
+├─ DocumentDB: 27 alarms/cluster (cache ratios, cursors, replication)
+├─ ALB: 18 alarms/LB (errors, connections, health)
+├─ OpenSearch: 17 alarms/domain (cluster health, shards)
+├─ Kafka: 21 alarms/cluster (partitions, replication)
+├─ RabbitMQ: 12 alarms/broker (messages, connections)
+└─ WAF: 2 alarms/WebACL (blocked/allowed requests)
 ```
+
+### Key Design Decisions
+
+1. **Moved DocumentDB & ALB to Resource-Based**
+   - Reason: Better granular control per cluster/load balancer
+   - Benefit: Specialized metrics (cache hit ratios, ELB error sources)
+
+2. **Use MAX Statistic**
+   - Reason: Catches worst-case across GROUP BY resources
+   - Benefit: No single resource issue goes undetected
+
+3. **Production Enhancements**
+   - Added EC2 status checks (infrastructure health)
+   - Added RDS I/O monitoring (bottleneck detection)
+   - Added DocumentDB cache metrics (memory pressure)
+   - Added ALB error source identification (faster troubleshooting)
+
+## Architecture
+
+### Component Diagram
+
+```
+┌──────────────────────────────────────────────────┐
+│         deploy-cloudwatch-alarms.py              │
+│  (Orchestrates deployment & resource discovery)  │
+└────────────────┬─────────────────────────────────┘
+                 │
+      ┌──────────┴──────────┐
+      │                     │
+      ▼                     ▼
+┌─────────────┐    ┌────────────────────┐
+│ Tag-Based   │    │ Resource-Based     │
+│ Template    │    │ Generator          │
+│ (Static)    │    │ (Dynamic)          │
+└──────┬──────┘    └──────┬─────────────┘
+       │                  │
+       └────────┬─────────┘
+                ▼
+       ┌─────────────────┐
+       │ CloudFormation  │
+       │   (7 Stacks)    │
+       └────────┬────────┘
+                ▼
+       ┌─────────────────┐
+       │  CloudWatch     │
+       │   Alarms        │
+       └─────────────────┘
+```
+
+### Data Flow
+
+1. **User runs deployment script** with tag key/value and SNS topic
+2. **Script validates** prerequisites (boto3, AWS credentials, templates)
+3. **For tag-based services:**
+   - Reads static CloudFormation template
+   - Injects tag parameters
+   - Deploys/updates stack
+4. **For resource-based services:**
+   - Discovers resources by tags using AWS APIs
+   - Generates CloudFormation template dynamically
+   - Deploys/updates stack per service
+5. **CloudFormation** creates/updates alarm resources
+6. **CloudWatch** monitors resources and sends alerts to SNS
 
 ## Components and Interfaces
 
-### 1. Deployment Script (`deploy-alarms-v2.py`)
+### 1. Deployment Script
 
-**Purpose**: Orchestrates alarm deployment for all services
+**File:** `deploy-cloudwatch-alarms.py`
 
-**Key Functions**:
+**Key Functions:**
+
 ```python
-def deploy_tag_based_alarms(service: str, tag_key: str, tag_value: str, 
-                            sns_topic: str, region: str) -> DeploymentResult:
-    """Deploy tag-based alarms for a service"""
-    
-def deploy_resource_based_alarms(service: str, resource_ids: List[str],
-                                 sns_topic: str, region: str) -> DeploymentResult:
-    """Deploy resource-based alarms for a service"""
-    
-def discover_resources(service: str, tag_filter: Dict, 
-                      region: str) -> List[str]:
-    """Discover all resources of a service type"""
-    
-def generate_cdk_template(service: str, resource_ids: List[str]) -> str:
-    """Generate CloudFormation template using CDK"""
+def deploy_tag_based_alarms(tag_key, tag_value, sns_topic, region) -> DeploymentResult
+def deploy_resource_based_alarms(service, resource_ids, sns_topic, region) -> DeploymentResult
+def discover_resources(service, region, tag_key, tag_value) -> List[str]
+def generate_resource_based_template(service, resource_ids, tag_value) -> str
 ```
 
-**CLI Interface**:
+**CLI Interface:**
+
 ```bash
-# Tag-based deployment
-python deploy-alarms-v2.py \
-  --service ec2 \
-  --mode tag-based \
-  --tag-key Environment \
-  --tag-value Production \
-  --sns-topic arn:aws:sns:us-east-1:123:alerts
+# Deploy everything
+--mode all --tag-key KEY --tag-value VALUE --sns-topic ARN --region REGION
 
-# Resource-based deployment
-python deploy-alarms-v2.py \
-  --service opensearch \
-  --mode resource-based \
-  --discover-all \
-  --sns-topic arn:aws:sns:us-east-1:123:alerts
+# Deploy tag-based only
+--mode tag-based --tag-key KEY --tag-value VALUE --sns-topic ARN
 
-# Deploy all services
-python deploy-alarms-v2.py \
-  --service all \
-  --tag-key Environment \
-  --tag-value Production \
-  --sns-topic arn:aws:sns:us-east-1:123:alerts
+# Deploy specific resource-based service
+--mode resource-based --service SERVICE --discover-all --sns-topic ARN
 ```
 
-### 2. Tag-Based CloudFormation Templates
+### 2. Tag-Based Template
 
-**Template Structure** (example: `ec2-alarms-tagged.yaml`):
+**File:** `cloudformation-tag-based-alarms.yaml`
+
+**Structure:**
+- Parameters: TagKey, TagValue, SNSTopicArn
+- Resources: 64 alarm definitions using Metrics Insights
+- Outputs: Stack name, alarm count, monitored services
+
+**Metrics Insights Query Pattern:**
+```sql
+SELECT MAX(MetricName) FROM "Namespace" 
+WHERE tag.{TagKey} = '{TagValue}' 
+GROUP BY DimensionName 
+ORDER BY MAX() DESC
+```
+
+### 3. Resource-Based Generator
+
+**File:** `generate-resource-alarms-simple.py`
+
+**Purpose:** Generates CloudFormation templates for resource-based services
+
+**Input:** Service config + resource IDs  
+**Output:** CloudFormation YAML template
+
+**Template Pattern:**
 ```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Tag-based CloudWatch Alarms for EC2
-
-Parameters:
-  TagKey:
-    Type: String
-    Description: Tag key to filter resources
-    Default: Environment
-  
-  TagValue:
-    Type: String
-    Description: Tag value to filter resources
-    Default: Production
-  
-  SNSTopicArn:
-    Type: String
-    Description: SNS Topic ARN for notifications
-
 Resources:
-  CPUCriticalAlarm:
+  ServiceMetricSeverityAlarmN:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${TagValue}-EC2-CPU-Critical'
-      # Uses Metrics Insights query with tag filter
+      AlarmName: {TagValue}-{Service}-{ResourceID}-{Metric}-{Severity}
       Metrics:
-        - Id: m1
-          ReturnData: true
-          MetricStat:
-            Metric:
-              Namespace: AWS/EC2
-              MetricName: CPUUtilization
-              # Tag-based dimension filtering
-            Period: 300
-            Stat: Average
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      AlarmActions:
-        - !Ref SNSTopicArn
-```
-
-### 3. CDK Template Generator
-
-**Purpose**: Dynamically generate CloudFormation templates for resource-based alarms
-
-**Implementation**:
-```python
-from aws_cdk import (
-    Stack,
-    aws_cloudwatch as cloudwatch,
-    aws_sns as sns
-)
-
-class ResourceBasedAlarmsStack(Stack):
-    def __init__(self, scope, id, service_config, resource_ids, **kwargs):
-        super().__init__(scope, id, **kwargs)
-        
-        # Create alarms for each resource
-        for resource_id in resource_ids:
-            for alarm_config in service_config['alarms']:
-                self.create_alarm(resource_id, alarm_config)
-    
-    def create_alarm(self, resource_id, config):
-        return cloudwatch.Alarm(
-            self, f"{resource_id}-{config['metric']}-{config['severity']}",
-            metric=cloudwatch.Metric(
-                namespace=config['namespace'],
-                metric_name=config['metric'],
-                dimensions={config['dimension_name']: resource_id}
-            ),
-            threshold=config['threshold'],
-            evaluation_periods=2,
-            comparison_operator=config['operator']
-        )
+        - Expression: SELECT max(Metric) FROM "Namespace" WHERE Dimension = 'ResourceID'
 ```
 
 ### 4. Service Configuration
 
-**Configuration File** (`service-config.yaml`):
+**File:** `alarm-config-resource-based.yaml`
+
+**Structure:**
 ```yaml
 services:
-  ec2:
-    supports_tags: true
-    template: cloudformation-alarms-ec2-tagged.yaml
-    alarms_per_resource: 8
-    namespace: AWS/EC2
-    dimension_name: InstanceId
-    
-  opensearch:
-    supports_tags: false
-    alarms_per_resource: 17
-    namespace: AWS/ES
-    dimension_name: DomainName
+  docdb:
+    name: DocumentDB
+    namespace: AWS/DocDB
+    dimension_name: DBClusterIdentifier
     alarms:
       - metric: CPUUtilization
-        severity: Critical
-        threshold: 90
+        severity: Warning
+        threshold: 80
         operator: GreaterThanThreshold
-      # ... more alarm configs
+        description: DocumentDB CPU使用率
 ```
 
 ## Data Models
@@ -240,256 +184,140 @@ class DeploymentResult:
     error_message: Optional[str] = None
 ```
 
-### ServiceConfig
-```python
-@dataclass
-class ServiceConfig:
-    name: str
-    supports_tags: bool
-    template_path: Optional[str]
-    alarms_per_resource: int
-    namespace: str
-    dimension_name: str
-    alarm_configs: List[AlarmConfig]
-```
-
-### AlarmConfig
-```python
-@dataclass
-class AlarmConfig:
-    metric: str
-    severity: str  # 'Info', 'Warning', 'Critical'
-    threshold: float
-    operator: str
-    period: int = 300
-    evaluation_periods: int = 2
-    description: str = ""
-```
-
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
-
-### Property 1: Tag-Based Alarm Automatic Monitoring
-*For any* resource with matching tags, when the resource is created, the existing tag-based alarm should automatically monitor it without requiring any CloudFormation stack updates.
+### Property 1: Tag-Based Automatic Monitoring
+*For any* resource with matching tags, the existing tag-based alarm should automatically monitor it without stack updates.
 **Validates: Requirements 1.3**
 
-### Property 2: Alarm Count Per Tag Group
-*For any* set of resources with the same tag key-value pair, there should be exactly one alarm per metric (not one alarm per resource per metric).
-**Validates: Requirements 1.4**
+### Property 2: Resource Discovery Completeness
+*For any* service and tag filter, resource discovery should find all matching resources in the region.
+**Validates: Requirements 7.1, 7.2**
 
-### Property 3: Resource-Based Alarm Count
-*For any* service with N resources, when deploying resource-based alarms, the system should create exactly N × alarms_per_resource alarms.
+### Property 3: Idempotent Deployment
+*For any* deployment configuration, running the script twice should produce the same result (no duplicates, same alarm count).
+**Validates: Requirements 4.4, 6.1**
+
+### Property 4: Zero-Downtime Updates
+*For any* stack update, existing alarms should remain active and monitoring should continue uninterrupted.
+**Validates: Requirements 6.1, 6.3**
+
+### Property 5: Alarm Count Accuracy
+*For any* resource-based service with N resources and M alarms per resource, exactly N × M alarms should be created.
 **Validates: Requirements 2.2**
-
-### Property 4: CloudFormation Resource Limit
-*For any* generated CloudFormation stack, the total number of resources in the stack must be ≤ 500.
-**Validates: Requirements 2.4**
-
-### Property 5: Configuration Preservation
-*For any* alarm configuration in the original templates, the generated template should preserve the threshold value, metric name, namespace, and severity level.
-**Validates: Requirements 6.1, 6.2, 6.3**
-
-### Property 6: Idempotent Deployment
-*For any* deployment configuration, running the deployment script twice should produce the same result as running it once (same stacks, same alarms, no duplicates).
-**Validates: Requirements 4.4**
-
-### Property 7: Stack Naming Convention
-*For all* created stacks, the stack name should match the pattern `tag-based-alarms` for the combined tag-based stack, or `{service}-alarms` for resource-based stacks.
-**Validates: Requirements 5.2**
-
-### Property 8: SNS Integration
-*For all* generated alarms, the alarm should have an AlarmActions property that references an SNS topic parameter.
-**Validates: Requirements 5.4**
-
-### Property 9: Resource Discovery Completeness
-*For any* service type and region, when discovering resources, the system should find all resources of that type that exist in that region.
-**Validates: Requirements 7.1**
-
-### Property 10: Tag Filtering
-*For any* tag filter (key=value), when discovering resources, only resources with that exact tag key-value pair should be returned.
-**Validates: Requirements 7.2**
-
-### Property 11: Stack Count
-*When* deploying all services, exactly 5 CloudFormation stacks should be created (1 tag-based stack + 4 resource-based stacks).
-**Validates: Requirements 5.3**
 
 ## Error Handling
 
 ### CloudFormation Limit Exceeded
 ```python
-if resource_count > 500:
-    raise CloudFormationLimitError(
-        f"Stack would have {resource_count} resources, exceeding the 500 limit. "
-        f"Consider splitting into multiple stacks or reducing resource count."
+if alarm_count > 500:
+    raise ValueError(
+        f"Stack would have {alarm_count} alarms, exceeding 500 limit. "
+        f"Consider splitting resources or using tag-based alarms."
     )
 ```
 
-### Resource Not Found
+### Resource Discovery Failures
 ```python
 try:
-    resources = discover_resources(service, region)
+    resources = discover_resources(service, region, tag_key, tag_value)
 except ClientError as e:
-    if e.response['Error']['Code'] == 'ResourceNotFoundException':
-        logger.warning(f"No {service} resources found in {region}")
-        return []
-    raise
+    logger.warning(f"Discovery failed for {service}: {e}")
+    return []  # Gracefully skip service
 ```
 
-### Template Generation Failure
-```python
-try:
-    template = generate_template(service, resources)
-    validate_template(template)
-except TemplateValidationError as e:
-    raise DeploymentError(
-        f"Template validation failed for {service}: {e.message}\n"
-        f"Check alarm configurations and CloudFormation syntax."
-    )
-```
-
-### Stack Update Failure
+### Stack Update Failures
 ```python
 try:
     cfn.update_stack(StackName=stack_name, TemplateBody=template)
 except ClientError as e:
     if 'No updates are to be performed' in str(e):
         return DeploymentResult(status='no-change')
-    elif 'ValidationError' in str(e):
-        raise DeploymentError(f"Stack update failed: {e}")
-    raise
+    raise  # Automatic rollback by CloudFormation
 ```
 
 ## Testing Strategy
 
 ### Unit Tests
-- Test template generation for each service
-- Test resource discovery with mocked AWS responses
-- Test configuration parsing and validation
-- Test error handling for various failure scenarios
-
-### Property-Based Tests
-- Property 1-11 (as defined in Correctness Properties section)
-- Each property test should run with minimum 100 iterations
-- Use hypothesis (Python) for property-based testing
+- Template generation for each service
+- Resource discovery with mocked AWS responses
+- Configuration parsing and validation
+- Error handling scenarios
 
 ### Integration Tests
 - Deploy to test AWS account
-- Verify stacks are created correctly
-- Verify alarms are monitoring resources
+- Verify alarms monitor resources correctly
 - Test stack updates with new resources
-- Test idempotency by running deployment twice
+- Validate idempotency
 
-### Example Property Test
-```python
-from hypothesis import given, strategies as st
-import pytest
+### Property-Based Tests
+- Test Properties 1-5 with 100+ iterations each
+- Use hypothesis for Python property testing
+- Tag format: `Feature: tag-based-cloudwatch-alarms, Property N`
 
-@given(
-    resources=st.lists(st.text(min_size=10, max_size=20), min_size=1, max_size=50),
-    alarms_per_resource=st.integers(min_value=1, max_value=50)
-)
-def test_resource_based_alarm_count(resources, alarms_per_resource):
-    """
-    Property 3: Resource-Based Alarm Count
-    Feature: tag-based-cloudwatch-alarms, Property 3
-    """
-    # Generate template
-    template = generate_resource_based_template('test-service', resources, alarms_per_resource)
-    
-    # Parse template and count alarm resources
-    alarm_count = count_alarms_in_template(template)
-    
-    # Verify: N resources × alarms_per_resource = total alarms
-    expected_count = len(resources) * alarms_per_resource
-    assert alarm_count == expected_count, \
-        f"Expected {expected_count} alarms for {len(resources)} resources, got {alarm_count}"
-```
+## Security
 
-## Migration Strategy
-
-### Phase 1: Preparation
-1. Backup existing alarm configurations
-2. Document current stack names and alarm counts
-3. Test new system in development environment
-
-### Phase 2: Tag-Based Services (Low Risk)
-1. Deploy tag-based alarms for EC2 (parallel to existing)
-2. Verify alarms are working
-3. Delete old per-instance EC2 alarm stacks
-4. Repeat for RDS, Redis, DocumentDB, EFS, ALB
-
-### Phase 3: Resource-Based Services (Medium Risk)
-1. Deploy new resource-based stacks for OpenSearch, Kafka, RabbitMQ, WAF
-2. Verify alarms are working
-3. Delete old alarm stacks
-
-### Phase 4: Cleanup
-1. Remove old deployment scripts
-2. Update documentation
-3. Archive old templates
-
-### Rollback Plan
-If issues occur:
-1. Keep old stacks running during migration
-2. Can switch back by updating SNS subscriptions
-3. Delete new stacks if needed
-4. No data loss (alarms don't store data)
-
-## Performance Considerations
-
-### Deployment Time
-- Tag-based: ~30 seconds per stack (7 stacks = 3.5 minutes)
-- Resource-based: ~2-5 minutes per stack depending on resource count
-- Total deployment time: ~10-15 minutes for all services
-
-### CloudWatch Costs
-- Old system: ~800 alarms × $0.10 = $80/month
-- New system: ~162 tag-based + ~200 resource-based = ~$36/month
-- **Savings: ~$44/month (55% reduction)**
-
-### API Rate Limits
-- Resource discovery: Paginated to handle large resource counts
-- CloudFormation updates: Sequential to avoid throttling
-- Implement exponential backoff for retries
-
-## Security Considerations
-
-### IAM Permissions Required
+### Required IAM Permissions
 ```json
 {
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cloudformation:CreateStack",
-        "cloudformation:UpdateStack",
-        "cloudformation:DescribeStacks",
-        "cloudwatch:PutMetricAlarm",
-        "cloudwatch:DescribeAlarms",
-        "ec2:DescribeInstances",
-        "rds:DescribeDBInstances",
-        "elasticache:DescribeCacheClusters",
-        "docdb:DescribeDBClusters",
-        "efs:DescribeFileSystems",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "es:ListDomainNames",
-        "kafka:ListClusters",
-        "mq:ListBrokers",
-        "wafv2:ListWebACLs"
-      ],
-      "Resource": "*"
-    }
-  ]
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "cloudformation:*Stack",
+      "cloudwatch:PutMetricAlarm",
+      "ec2:DescribeInstances",
+      "rds:DescribeDBInstances",
+      "elasticache:DescribeCacheClusters",
+      "docdb:DescribeDBClusters",
+      "efs:DescribeFileSystems",
+      "elasticloadbalancing:DescribeLoadBalancers",
+      "es:ListDomainNames",
+      "kafka:ListClusters",
+      "mq:ListBrokers",
+      "wafv2:ListWebACLs",
+      "*:ListTagsForResource"
+    ],
+    "Resource": "*"
+  }]
 }
 ```
 
-### SNS Topic Permissions
-- Ensure SNS topic allows CloudWatch to publish
-- Use resource-based policy on SNS topic
+### SNS Topic Policy
+```json
+{
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Service": "cloudwatch.amazonaws.com"},
+    "Action": "SNS:Publish",
+    "Resource": "arn:aws:sns:region:account:topic"
+  }]
+}
+```
 
-### Tag-Based Security
-- Ensure resources are tagged consistently
-- Use AWS Config rules to enforce tagging
-- Implement tag-based access control if needed
+## Performance
+
+### Deployment Time
+- Tag-based stack: ~30 seconds
+- Resource-based stacks: ~2-5 minutes each
+- Total: ~10-15 minutes for complete deployment
+
+### Cost
+- Old system: ~800 alarms × $0.10 = $80/month
+- New system: ~130 alarms × $0.10 = $13/month
+- **Savings: $67/month (84% reduction)**
+
+## Migration from Old System
+
+### Approach
+1. Deploy new system in parallel
+2. Verify alarms working correctly
+3. Update SNS subscriptions if needed
+4. Delete old stacks
+5. No monitoring gaps
+
+### Rollback
+- Keep old stacks during migration
+- Can revert by deleting new stacks
+- Zero data loss (alarms don't store data)
+
