@@ -22,12 +22,13 @@ python deploy-cloudwatch-alarms.py --mode all \
 ### Architecture Overview
 
 ```
-Tag-Based Stack (1):
-└─ 64 alarms for EC2, RDS, Redis, EFS
-   ├─ EC2: CPU, Network, Status Checks (11 alarms)
-   ├─ RDS: CPU, Memory, Storage, IOPS, Latency, I/O Queue (25 alarms)
-   ├─ Redis: CPU, Memory, Connections, Evictions, Cache Hit Rate (19 alarms)
-   └─ EFS: Connections, IO Limit, Burst Credits (8 alarms)
+Tag-Based Stack (1) + EKS EC2 Stacks:
+├─ 64 alarms for EC2, RDS, Redis, EFS
+│  ├─ EC2: CPU, Network, Status Checks (11 alarms)
+│  ├─ RDS: CPU, Memory, Storage, IOPS, Latency, I/O Queue (25 alarms)
+│  ├─ Redis: CPU, Memory, Connections, Evictions, Cache Hit Rate (19 alarms)
+│  └─ EFS: Connections, IO Limit, Burst Credits (8 alarms)
+└─ EKS EC2 Nodes: 11 alarms per EKS cluster (auto-discovered via eks:cluster-name tag)
 
 Resource-Based Stacks (6):
 ├─ DocumentDB: 27 alarms per cluster (cache ratios, cursors, replication)
@@ -112,7 +113,7 @@ python deploy-cloudwatch-alarms.py --mode all \
 ### Update Individual Services
 
 ```bash
-# Update only tag-based alarms (EC2, RDS, Redis, EFS)
+# Update tag-based alarms (EC2, RDS, Redis, EFS + EKS EC2 nodes)
 python deploy-cloudwatch-alarms.py --mode tag-based \
   --tag-key businessTag --tag-value EM-SNC-CLOUD \
   --sns-topic arn:aws:sns:us-east-1:476114114317:cloudwatchTopic \
@@ -135,6 +136,7 @@ python deploy-cloudwatch-alarms.py --mode resource-based \
 | Service | Type | Alarms | Key Metrics |
 |---------|------|--------|-------------|
 | **EC2** | Tag-Based | 11 | CPU, Network, Status Checks |
+| **EKS EC2** | Tag-Based | 11/cluster | CPU, Network, Status Checks (via eks:cluster-name) |
 | **RDS** | Tag-Based | 25 | CPU, Memory, Storage, IOPS, Latency, I/O Queue |
 | **Redis** | Tag-Based | 19 | CPU, Memory, Connections, Evictions, Cache Hit |
 | **EFS** | Tag-Based | 8 | Connections, IO Limit, Burst Credits |
@@ -240,10 +242,11 @@ A: Yes! Updates are idempotent and zero-downtime.
 ## 📁 Files
 
 - `cloudformation-tag-based-alarms.yaml` - Tag-based template (64 alarms)
+- `cloudformation-eks-ec2-alarms.yaml` - EKS EC2 node alarms template (11 alarms per cluster)
 - `alarm-config-resource-based.yaml` - Resource-based config
 - `deploy-cloudwatch-alarms.py` - Deployment script
 - `generate-resource-alarms-simple.py` - Template generator
-- `ARCHITECTURE_REVIEW.md` - Production readiness assessment
+- `METRICS_REFERENCE.md` - Complete metrics reference
 - `README.md` - This file
 
 ---

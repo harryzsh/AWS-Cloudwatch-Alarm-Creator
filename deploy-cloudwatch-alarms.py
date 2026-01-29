@@ -18,6 +18,7 @@ from dataclasses import dataclass
 # Service configuration
 TAG_BASED_SERVICES = ['ec2', 'rds-mysql', 'rds-postgres', 'redis', 'efs']
 RESOURCE_BASED_SERVICES = ['opensearch', 'kafka', 'rabbitmq', 'waf', 'docdb', 'alb']
+EKS_EC2_ALARM_COUNT = 11  # Number of alarms in cloudformation-eks-ec2-alarms.yaml
 
 @dataclass
 class DeploymentResult:
@@ -53,6 +54,7 @@ def validate_prerequisites():
     # Check required files
     required_files = [
         'cloudformation-tag-based-alarms.yaml',
+        'cloudformation-eks-ec2-alarms.yaml',
         'alarm-config-resource-based.yaml',
         'generate-resource-based-template.py'
     ]
@@ -234,7 +236,27 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str) 
     print(f"🔍 Discovering {service} resources with tag {tag_key}={tag_value} in {region}...")
     
     try:
-        if service == 'opensearch':
+        if service == 'eks':
+            # Discover EKS clusters with the business tag
+            client = boto3.client('eks', region_name=region)
+            response = client.list_clusters()
+            all_clusters = response.get('clusters', [])
+            
+            # Filter by tags
+            filtered_clusters = []
+            for cluster_name in all_clusters:
+                try:
+                    cluster_info = client.describe_cluster(name=cluster_name)
+                    tags = cluster_info.get('cluster', {}).get('tags', {})
+                    
+                    if tags.get(tag_key) == tag_value:
+                        filtered_clusters.append(cluster_name)
+                except Exception as e:
+                    print(f"   Warning: Could not get tags for EKS cluster {cluster_name}: {e}")
+            
+            resources = filtered_clusters
+        
+        elif service == 'opensearch':
             client = boto3.client('opensearch', region_name=region)
             sts = boto3.client('sts', region_name=region)
             account_id = sts.get_caller_identity()['Account']
@@ -397,6 +419,91 @@ def generate_resource_based_template(service: str, resource_ids: List[str], tag_
         raise
 
 
+def deploy_eks_ec2_alarms(eks_cluster_name: str, sns_topic: str, region: str, 
+                          tag_value: str) -> DeploymentResult:
+    """Deploy EKS EC2 node alarms for a specific EKS cluster"""
+    
+    cfn = boto3.client('cloudformation', region_name=region)
+    stack_name = f'eks-ec2-alarms-{eks_cluster_name}'
+    template_file = 'cloudformation-eks-ec2-alarms.yaml'
+    
+    print(f"📦 Deploying EKS EC2 alarms for cluster: {eks_cluster_name}...")
+    print(f"   Stack: {stack_name}")
+    print(f"   Tag filter: eks:cluster-name={eks_cluster_name}")
+    
+    try:
+        # Read template
+        with open(template_file, 'r', encoding='utf-8', errors='ignore') as f:
+            template_body = f.read()
+        
+        # Build parameters
+        parameters = [
+            {'ParameterKey': 'EKSClusterName', 'ParameterValue': eks_cluster_name},
+            {'ParameterKey': 'BusinessTagValue', 'ParameterValue': tag_value},
+            {'ParameterKey': 'SNSTopicArn', 'ParameterValue': sns_topic}
+        ]
+        
+        # Check if stack exists
+        try:
+            cfn.describe_stacks(StackName=stack_name)
+            print(f"   Stack exists, updating...")
+            
+            try:
+                cfn.update_stack(
+                    StackName=stack_name,
+                    TemplateBody=template_body,
+                    Parameters=parameters
+                )
+                print(f"✓ Stack update initiated")
+                return DeploymentResult(
+                    service=f'eks-ec2-{eks_cluster_name}',
+                    stack_name=stack_name,
+                    status='updated',
+                    alarm_count=EKS_EC2_ALARM_COUNT,
+                    resource_count=1
+                )
+            except cfn.exceptions.ClientError as e:
+                if 'No updates are to be performed' in str(e):
+                    print(f"  No changes needed")
+                    return DeploymentResult(
+                        service=f'eks-ec2-{eks_cluster_name}',
+                        stack_name=stack_name,
+                        status='no-change',
+                        alarm_count=EKS_EC2_ALARM_COUNT,
+                        resource_count=1
+                    )
+                raise
+        
+        except cfn.exceptions.ClientError as e:
+            if 'does not exist' in str(e):
+                print(f"   Creating new stack...")
+                cfn.create_stack(
+                    StackName=stack_name,
+                    TemplateBody=template_body,
+                    Parameters=parameters
+                )
+                print(f"✓ Stack creation initiated")
+                return DeploymentResult(
+                    service=f'eks-ec2-{eks_cluster_name}',
+                    stack_name=stack_name,
+                    status='created',
+                    alarm_count=EKS_EC2_ALARM_COUNT,
+                    resource_count=1
+                )
+            raise
+    
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        return DeploymentResult(
+            service=f'eks-ec2-{eks_cluster_name}',
+            stack_name=stack_name,
+            status='failed',
+            alarm_count=0,
+            resource_count=0,
+            error_message=str(e)
+        )
+
+
 def deploy_resource_based_alarms(service: str, resource_ids: List[str], 
                                  sns_topic: str, region: str, tag_value: str) -> DeploymentResult:
     """Deploy resource-based alarms for a service"""
@@ -497,17 +604,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Deploy tag-based alarms for Production
-  python deploy-alarms-v2.py --mode tag-based --tag-key Environment --tag-value Production
+  # Deploy tag-based alarms for Production (includes EKS EC2 nodes)
+  python deploy-cloudwatch-alarms.py --mode tag-based --tag-key Environment --tag-value Production
 
   # Deploy resource-based alarms for OpenSearch (auto-discover)
-  python deploy-alarms-v2.py --mode resource-based --service opensearch --discover-all
+  python deploy-cloudwatch-alarms.py --mode resource-based --service opensearch
 
   # Deploy resource-based alarms for specific Kafka clusters
-  python deploy-alarms-v2.py --mode resource-based --service kafka --resources cluster-1 cluster-2
+  python deploy-cloudwatch-alarms.py --mode resource-based --service kafka --resources cluster-1 cluster-2
 
-  # Deploy everything
-  python deploy-alarms-v2.py --mode all --tag-key Environment --tag-value Production
+  # Deploy everything (tag-based + EKS EC2 + resource-based)
+  python deploy-cloudwatch-alarms.py --mode all --tag-key Environment --tag-value Production
         """
     )
     
@@ -557,6 +664,7 @@ Examples:
     
     # Deploy based on mode
     if args.mode == 'tag-based':
+        # Deploy regular tag-based alarms
         result = deploy_tag_based_alarms(
             args.tag_key,
             args.tag_value,
@@ -565,6 +673,25 @@ Examples:
             args.stack_name
         )
         results.append(result)
+        
+        # Also deploy EKS EC2 node alarms (for EC2 instances belonging to EKS clusters)
+        print("\n" + "-" * 60)
+        print("🔍 Checking for EKS clusters with business tag...")
+        eks_clusters = discover_resources('eks', args.region, args.tag_key, args.tag_value)
+        
+        if eks_clusters:
+            print(f"   Found {len(eks_clusters)} EKS cluster(s): {', '.join(eks_clusters)}")
+            for cluster_name in eks_clusters:
+                print(f"\n--- EKS EC2 Nodes: {cluster_name} ---")
+                result = deploy_eks_ec2_alarms(
+                    cluster_name,
+                    args.sns_topic,
+                    args.region,
+                    args.tag_value
+                )
+                results.append(result)
+        else:
+            print(f"   No EKS clusters found with tag {args.tag_key}={args.tag_value}, skipping EKS EC2 alarms")
     
     elif args.mode == 'resource-based':
         # Get resource IDs via tag-based discovery or manual list
@@ -602,9 +729,29 @@ Examples:
         )
         results.append(result)
         
+        # Deploy EKS EC2 alarms
+        print("\n" + "=" * 60)
+        print("PHASE 2: EKS EC2 Node Alarms")
+        print("=" * 60)
+        eks_clusters = discover_resources('eks', args.region, args.tag_key, args.tag_value)
+        
+        if eks_clusters:
+            print(f"   Found {len(eks_clusters)} EKS cluster(s): {', '.join(eks_clusters)}")
+            for cluster_name in eks_clusters:
+                print(f"\n--- EKS Cluster: {cluster_name} ---")
+                result = deploy_eks_ec2_alarms(
+                    cluster_name,
+                    args.sns_topic,
+                    args.region,
+                    args.tag_value
+                )
+                results.append(result)
+        else:
+            print(f"  No EKS clusters found with tag {args.tag_key}={args.tag_value}, skipping")
+        
         # Deploy resource-based for each service
         print("\n" + "=" * 60)
-        print("PHASE 2: Resource-Based Alarms")
+        print("PHASE 3: Resource-Based Alarms")
         print("=" * 60)
         
         for service in RESOURCE_BASED_SERVICES:
