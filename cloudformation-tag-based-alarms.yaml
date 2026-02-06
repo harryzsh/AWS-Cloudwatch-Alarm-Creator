@@ -1,1235 +1,269 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Unified Tag-Based CloudWatch Alarms for EC2, RDS, ElastiCache, and EFS (64 alarms)
+Description: Tag-Based CloudWatch Alarms for EC2, NAT Gateway, and VPN (10 alarms)
+
 Parameters:
   TagKey:
     Type: String
     Description: Tag key to filter resources (e.g., Environment, Team, Application)
     AllowedPattern: .+
     ConstraintDescription: TagKey is required and cannot be empty
+
   TagValue:
     Type: String
     Description: Tag value to filter resources (e.g., Production, Staging, UAT)
     AllowedPattern: .+
     ConstraintDescription: TagValue is required and cannot be empty
+
   SNSTopicArn:
     Type: String
-    Description: SNS Topic ARN for alarm notifications (REQUIRED - alarms will not
-      notify without this)
+    Description: SNS Topic ARN for alarm notifications (REQUIRED - alarms will not notify without this)
     AllowedPattern: arn:aws:sns:[a-z0-9-]+:[0-9]{12}:.+
     ConstraintDescription: Must be a valid SNS Topic ARN (e.g., arn:aws:sns:ap-southeast-2:123456789012:my-topic)
+
 Resources:
-  EC2EC2CPUInfoAlarm:
+  # =============================================================================
+  # EC2 Alarms (7 alarms)
+  # =============================================================================
+
+  # EC2 Alarm 1: CPUUtilization
+  EC2CPUUtilizationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-CPUUtilization-Info
-      AlarmDescription: 服务器CPU使用?- Info级别告警
+      AlarmName: !Sub "${TagValue}-EC2-CPUUtilization_WARNING"
+      AlarmDescription: 服务器CPU使用率超过90%
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CPUUtilization) FROM "AWS/EC2" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 85
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EC2EC2CPUWarningAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-CPUUtilization-Warning
-      AlarmDescription: 服务器CPU使用?- Warning级别告警
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CPUUtilization) FROM "AWS/EC2" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(CPUUtilization) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
       Threshold: 90
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  EC2EC2CPUCriticalAlarm:
+        - !Ref SNSTopicArn
+
+  # EC2 Alarm 2: mem_used_percent (CWAgent)
+  EC2MemoryUsedPercentAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-CPUUtilization-Critical
-      AlarmDescription: 服务器CPU使用?- Critical级别告警
+      AlarmName: !Sub "${TagValue}-EC2-MemoryUsedPercent_WARNING"
+      AlarmDescription: 服务器内存使用率超过90% (需要CloudWatch Agent)
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CPUUtilization) FROM "AWS/EC2" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 95
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EC2EC2NetworkInInfoAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkIn-Info
-      AlarmDescription: 网络入口带宽 - Info级别告警
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkIn) FROM "AWS/EC2" WHERE tag.${TagKey} = '${TagValue}'
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(mem_used_percent) FROM "CWAgent"
+            WHERE tag.${TagKey} = '${TagValue}'
             GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 157286400
+          Period: 300
+      Threshold: 90
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  EC2EC2NetworkInWarningAlarm:
+        - !Ref SNSTopicArn
+
+  # EC2 Alarm 3: disk_used_percent (CWAgent)
+  EC2DiskUsedPercentAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkIn-Warning
-      AlarmDescription: 网络入口带宽 - Warning级别告警
+      AlarmName: !Sub "${TagValue}-EC2-DiskUsedPercent_WARNING"
+      AlarmDescription: 服务器磁盘使用率超过90% (需要CloudWatch Agent)
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkIn) FROM "AWS/EC2" WHERE tag.${TagKey} = '${TagValue}'
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(disk_used_percent) FROM "CWAgent"
+            WHERE tag.${TagKey} = '${TagValue}'
             GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 314572800
+          Period: 300
+      Threshold: 90
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  EC2EC2NetworkOutInfoAlarm:
+        - !Ref SNSTopicArn
+
+  # EC2 Alarm 4: disk_inodes_used_percent (CWAgent)
+  EC2DiskInodesUsedPercentAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkOut-Info
-      AlarmDescription: 网络出口带宽 - Info级别告警
+      AlarmName: !Sub "${TagValue}-EC2-DiskInodesUsedPercent_WARNING"
+      AlarmDescription: 服务器磁盘inode使用率超过90% (需要CloudWatch Agent)
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkOut) FROM "AWS/EC2" WHERE tag.${TagKey} = '${TagValue}'
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(disk_inodes_used_percent) FROM "CWAgent"
+            WHERE tag.${TagKey} = '${TagValue}'
             GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 157286400
+          Period: 300
+      Threshold: 90
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  EC2EC2NetworkOutWarningAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkOut-Warning
-      AlarmDescription: 网络出口带宽 - Warning级别告警
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkOut) FROM "AWS/EC2" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 314572800
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EC2StatusCheckFailedAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed-Critical
-      AlarmDescription: EC2状态检查失败 - 系统或实例问题
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(StatusCheckFailed) FROM "AWS/EC2" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
+        - !Ref SNSTopicArn
+
+  # EC2 Alarm 5: StatusCheckFailed_System
   EC2StatusCheckFailedSystemAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed_System-Critical
+      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedSystem_WARNING"
       AlarmDescription: EC2系统状态检查失败 - AWS基础设施问题
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(StatusCheckFailed_System) FROM "AWS/EC2" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(StatusCheckFailed_System) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
+        - !Ref SNSTopicArn
+
+  # EC2 Alarm 6: StatusCheckFailed
+  EC2StatusCheckFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailed_WARNING"
+      AlarmDescription: EC2状态检查失败 - 系统或实例问题
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(StatusCheckFailed) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+
+  # EC2 Alarm 7: StatusCheckFailed_Instance
   EC2StatusCheckFailedInstanceAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed_Instance-Critical
+      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedInstance_WARNING"
       AlarmDescription: EC2实例状态检查失败 - 实例配置问题
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(StatusCheckFailed_Instance) FROM "AWS/EC2" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 300
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(StatusCheckFailed_Instance) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  EC2StatusCheckFailedAttachedEBSAlarm:
+        - !Ref SNSTopicArn
+
+  # =============================================================================
+  # NAT Gateway Alarms (1 alarm)
+  # =============================================================================
+
+  # NAT Gateway Alarm 1: ErrorPortAllocation
+  NATGatewayErrorPortAllocationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed_AttachedEBS-Critical
-      AlarmDescription: EC2附加EBS卷状态检查失败 - 存储连接问题
+      AlarmName: !Sub "${TagValue}-NATGateway-ErrorPortAllocation_WARNING"
+      AlarmDescription: NAT网关端口分配错误超过100次
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(StatusCheckFailed_AttachedEBS) FROM "AWS/EC2" WHERE
-            tag.${TagKey} = '${TagValue}' GROUP BY tag.Name ORDER BY MAX() DESC
-        Period: 60
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(ErrorPortAllocation) FROM "AWS/NATGateway"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY NatGatewayId ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+
+  # =============================================================================
+  # VPN Alarms (2 alarms)
+  # =============================================================================
+
+  # VPN Alarm 1: TunnelState (connection-level)
+  VPNTunnelStateConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-VPN-TunnelState-Connection_WARNING"
+      AlarmDescription: VPN连接隧道状态异常 - 连接级别监控
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(TunnelState) FROM "AWS/VPN"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY VpnId ORDER BY MAX() DESC
+          Period: 300
       Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 10
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisInfoAlarm0:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-EngineCPUUtilization-Info
-      AlarmDescription: Redis引擎CPU使用率 - Redis单线程CPU使用率
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(EngineCPUUtilization) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm1:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-EngineCPUUtilization-Warning
-      AlarmDescription: Redis引擎CPU使用率 - Redis单线程CPU使用率
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(EngineCPUUtilization) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm2:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-EngineCPUUtilization-Critical
-      AlarmDescription: Redis引擎CPU使用率 - Redis单线程CPU使用率
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(EngineCPUUtilization) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisInfoAlarm3:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-DatabaseMemoryUsagePercentage-Info
-      AlarmDescription: 内存使用率 - 数据库内存使用百分比
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DatabaseMemoryUsagePercentage) FROM "AWS/ElastiCache"
-            WHERE tag.${TagKey} = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX()
-            DESC
-        Period: 300
-      Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm4:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-DatabaseMemoryUsagePercentage-Warning
-      AlarmDescription: 内存使用率 - 数据库内存使用百分比
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DatabaseMemoryUsagePercentage) FROM "AWS/ElastiCache"
-            WHERE tag.${TagKey} = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX()
-            DESC
-        Period: 300
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm5:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-DatabaseMemoryUsagePercentage-Critical
-      AlarmDescription: 内存使用率 - 数据库内存使用百分比
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DatabaseMemoryUsagePercentage) FROM "AWS/ElastiCache"
-            WHERE tag.${TagKey} = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX()
-            DESC
-        Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisInfoAlarm6:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CurrConnections-Info
-      AlarmDescription: 当前连接数 - 客户端连接数量
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CurrConnections) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 5000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm7:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CurrConnections-Warning
-      AlarmDescription: 当前连接数 - 客户端连接数量
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CurrConnections) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 8000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm8:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CurrConnections-Critical
-      AlarmDescription: 当前连接数 - 客户端连接数量
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CurrConnections) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 10000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm9:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-Evictions-Warning
-      AlarmDescription: 键驱逐数 - 内存不足导致的键驱逐
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(Evictions) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 1000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm10:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-Evictions-Critical
-      AlarmDescription: 键驱逐数 - 内存不足导致的键驱逐
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(Evictions) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 5000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm11:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CacheHitRate-Warning
-      AlarmDescription: 缓存命中率 - 缓存效率指标
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CacheHitRate) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 0.8
       ComparisonOperator: LessThanThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm12:
+        - !Ref SNSTopicArn
+
+  # VPN Alarm 2: TunnelState (tunnel-level)
+  VPNTunnelStateTunnelAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CacheHitRate-Critical
-      AlarmDescription: 缓存命中率 - 缓存效率指标
+      AlarmName: !Sub "${TagValue}-VPN-TunnelState-Tunnel_WARNING"
+      AlarmDescription: VPN隧道状态异常 - 隧道级别监控
       Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CacheHitRate) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 0.6
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(TunnelState) FROM "AWS/VPN"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY VpnId, TunnelIpAddress ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 1
       ComparisonOperator: LessThanThreshold
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm13:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-ReplicationLag-Warning
-      AlarmDescription: 复制延迟 - 主从复制延迟时间
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReplicationLag) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 30
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm14:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-ReplicationLag-Critical
-      AlarmDescription: 复制延迟 - 主从复制延迟时间
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReplicationLag) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 60
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm15:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesIn-Warning
-      AlarmDescription: 网络入流量 - 网络接收字节数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkBytesIn) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 157286400
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm16:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesIn-Critical
-      AlarmDescription: 网络入流量 - 网络接收字节数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkBytesIn) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 314572800
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisWarningAlarm17:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesOut-Warning
-      AlarmDescription: 网络出流量 - 网络发送字节数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkBytesOut) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 157286400
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RedisCriticalAlarm18:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesOut-Critical
-      AlarmDescription: 网络出流量 - 网络发送字节数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(NetworkBytesOut) FROM "AWS/ElastiCache" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY CacheClusterId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 314572800
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSInfoAlarm0:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DatabaseConnections-Info
-      AlarmDescription: RDS数据库连接数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DatabaseConnections) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 100
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm1:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DatabaseConnections-Warning
-      AlarmDescription: RDS数据库连接数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DatabaseConnections) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 200
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm2:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DatabaseConnections-Critical
-      AlarmDescription: RDS数据库连接数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DatabaseConnections) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 300
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSInfoAlarm3:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-CPUUtilization-Info
-      AlarmDescription: RDS CPU使用率
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CPUUtilization) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm4:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-CPUUtilization-Warning
-      AlarmDescription: RDS CPU使用率
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CPUUtilization) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm5:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-CPUUtilization-Critical
-      AlarmDescription: RDS CPU使用率
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(CPUUtilization) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSInfoAlarm6:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeableMemory-Info
-      AlarmDescription: RDS可用内存
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(FreeableMemory) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 1073741824
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm7:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeableMemory-Warning
-      AlarmDescription: RDS可用内存
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(FreeableMemory) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 536870912
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm8:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeableMemory-Critical
-      AlarmDescription: RDS可用内存
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(FreeableMemory) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 268435456
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSInfoAlarm9:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeStorageSpace-Info
-      AlarmDescription: RDS可用存储空间
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(FreeStorageSpace) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 10737418240
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm10:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeStorageSpace-Warning
-      AlarmDescription: RDS可用存储空间
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(FreeStorageSpace) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 5368709120
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm11:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeStorageSpace-Critical
-      AlarmDescription: RDS可用存储空间
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(FreeStorageSpace) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 2147483648
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm12:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadIOPS-Warning
-      AlarmDescription: RDS读IOPS
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReadIOPS) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 10000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm13:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadIOPS-Critical
-      AlarmDescription: RDS读IOPS
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReadIOPS) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 20000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm14:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteIOPS-Warning
-      AlarmDescription: RDS写IOPS
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(WriteIOPS) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 10000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm15:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteIOPS-Critical
-      AlarmDescription: RDS写IOPS
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(WriteIOPS) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 20000
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm16:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadLatency-Warning
-      AlarmDescription: RDS读延迟
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReadLatency) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 0.01
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm17:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadLatency-Critical
-      AlarmDescription: RDS读延迟
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReadLatency) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 0.02
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm18:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteLatency-Warning
-      AlarmDescription: RDS写延迟
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(WriteLatency) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 0.01
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm19:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteLatency-Critical
-      AlarmDescription: RDS写延迟
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(WriteLatency) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 0.02
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm20:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReplicaLag-Warning
-      AlarmDescription: RDS复制延迟
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReplicaLag) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 30
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm21:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReplicaLag-Critical
-      AlarmDescription: RDS复制延迟
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ReplicaLag) FROM "AWS/RDS" WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 60
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm22:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DiskQueueDepth-Warning
-      AlarmDescription: RDS磁盘队列深度 - IO等待队列过长
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DiskQueueDepth) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 10
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSCriticalAlarm23:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DiskQueueDepth-Critical
-      AlarmDescription: RDS磁盘队列深度 - IO等待队列过长
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(DiskQueueDepth) FROM "AWS/RDS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 20
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  RDSWarningAlarm24:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-RDS-BurstBalance-Warning
-      AlarmDescription: RDS突发余额 - GP2卷IOPS积分不足
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MIN(BurstBalance) FROM "AWS/RDS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY DBInstanceIdentifier ORDER BY MIN() ASC
-        Period: 300
-      Threshold: 20
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 3
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSInfoAlarm0:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-ClientConnections-Info
-      AlarmDescription: EFS客户端连接数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ClientConnections) FROM "AWS/EFS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 100
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSWarningAlarm1:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-ClientConnections-Warning
-      AlarmDescription: EFS客户端连接数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ClientConnections) FROM "AWS/EFS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 200
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSCriticalAlarm2:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-ClientConnections-Critical
-      AlarmDescription: EFS客户端连接数
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(ClientConnections) FROM "AWS/EFS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 300
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSInfoAlarm3:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-PercentIOLimit-Info
-      AlarmDescription: EFS IO限制百分比
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(PercentIOLimit) FROM "AWS/EFS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSWarningAlarm4:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-PercentIOLimit-Warning
-      AlarmDescription: EFS IO限制百分比
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(PercentIOLimit) FROM "AWS/EFS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSCriticalAlarm5:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-PercentIOLimit-Critical
-      AlarmDescription: EFS IO限制百分比
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(PercentIOLimit) FROM "AWS/EFS" WHERE tag.${TagKey} =
-            '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 95
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSWarningAlarm6:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-BurstCreditBalance-Warning
-      AlarmDescription: EFS突发积分余额
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(BurstCreditBalance) FROM "AWS/EFS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 1099511627776
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
-  EFSCriticalAlarm7:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName:
-        Fn::Sub: ${TagValue}-EFS-BurstCreditBalance-Critical
-      AlarmDescription: EFS突发积分余额
-      Metrics:
-      - Id: m1
-        ReturnData: true
-        Expression:
-          Fn::Sub: SELECT MAX(BurstCreditBalance) FROM "AWS/EFS" WHERE tag.${TagKey}
-            = '${TagValue}' GROUP BY FileSystemId ORDER BY MAX() DESC
-        Period: 300
-      Threshold: 549755813888
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-      - Ref: SNSTopicArn
+        - !Ref SNSTopicArn
+
 Outputs:
-  StackName:
-    Description: Name of this CloudFormation stack
-    Value:
-      Ref: AWS::StackName
-  TagFilter:
-    Description: Tag filter applied to resources
-    Value:
-      Fn::Sub: ${TagKey}=${TagValue}
-  MonitoredServices:
-    Description: Services monitored by this stack
-    Value: EC2, RDS-MySQL, RDS-PostgreSQL, ElastiCache-Redis, EFS
   AlarmCount:
-    Description: Total number of alarms in this stack
-    Value: 159
+    Description: Total number of alarms in this template
+    Value: "10"
+
+  EC2AlarmCount:
+    Description: Number of EC2 alarms
+    Value: "7"
+
+  NATGatewayAlarmCount:
+    Description: Number of NAT Gateway alarms
+    Value: "1"
+
+  ALBAlarmCount:
+    Description: Number of ALB alarms (moved to resource-based)
+    Value: "0"
+
+  VPNAlarmCount:
+    Description: Number of VPN alarms
+    Value: "2"
+
+  TagBasedServices:
+    Description: Services monitored by this tag-based template
+    Value: "EC2, NAT Gateway, VPN"

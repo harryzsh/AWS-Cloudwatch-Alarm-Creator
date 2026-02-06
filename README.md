@@ -6,14 +6,16 @@ Enterprise-ready CloudWatch alarm deployment system with AWS best practices. Hyb
 
 ```bash
 # Deploy everything in one command
-python deploy-cloudwatch-alarms.py --mode all \
-  --tag-key businessTag \
-  --tag-value EM-SNC-CLOUD \
-  --sns-topic arn:aws:sns:us-east-1:476114114317:cloudwatchTopic \
+python deploy_alarms.py --mode all \
+  --tag-key Environment \
+  --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
 ```
 
 **Safe to run multiple times** - Creates new stacks or updates existing ones (zero downtime, no deletion).
+
+> `--tag-key`, `--tag-value`, and `--sns-topic` are all required for every deployment mode.
 
 ---
 
@@ -22,32 +24,27 @@ python deploy-cloudwatch-alarms.py --mode all \
 ### Architecture Overview
 
 ```
-Tag-Based Stack (1) + EKS EC2 Stacks:
-├─ 64 alarms for EC2, RDS, Redis, EFS
-│  ├─ EC2: CPU, Network, Status Checks (11 alarms)
-│  ├─ RDS: CPU, Memory, Storage, IOPS, Latency, I/O Queue (25 alarms)
-│  ├─ Redis: CPU, Memory, Connections, Evictions, Cache Hit Rate (19 alarms)
-│  └─ EFS: Connections, IO Limit, Burst Credits (8 alarms)
-└─ EKS EC2 Nodes: 11 alarms per EKS cluster (auto-discovered via eks:cluster-name tag)
+Tag-Based Stack (1):
+├─ 10 alarms for EC2, NAT Gateway, VPN
+│  ├─ EC2: CPU, Memory*, Disk*, Inodes*, Status Checks (7 alarms)
+│  ├─ NAT Gateway: Port Allocation Errors (1 alarm)
+│  ├─ │  └─ VPN: Tunnel State - Connection & Tunnel level (2 alarms)
+│
+│  * Requires CloudWatch Agent installed on EC2 instances
 
-Resource-Based Stacks (6):
-├─ DocumentDB: 27 alarms per cluster (cache ratios, cursors, replication)
-├─ ALB: 18 alarms per load balancer (errors, connections, health)
-├─ OpenSearch: 17 alarms per domain (cluster health, shards, performance)
-├─ Kafka: 21 alarms per cluster (CPU, memory, partitions, replication)
-├─ RabbitMQ: 12 alarms per broker (CPU, memory, messages, connections)
-└─ WAF: 2 alarms per WebACL (blocked/allowed requests)
+Resource-Based Stacks (4):
+├─ Kafka (MSK): 5 alarms per cluster (MaxOffsetLag, CPU, Memory, Disk, Controller)
+├─ ACM: 1 alarm per certificate (DaysToExpiry)
+├─ ALB: 1 alarm per load balancer (UnHealthyHostCount)
+└─ Direct Connect: 3 alarms per connection (ConnectionState, Ingress/Egress Bandwidth)
 ```
 
-### Production Enhancements (Jan 2026)
+### Key Features
 
-Based on AWS official documentation and best practices:
-
-- ✅ **EC2 Status Checks** - Detect infrastructure failures
-- ✅ **RDS I/O Monitoring** - DiskQueueDepth, BurstBalance
-- ✅ **DocumentDB Cache Metrics** - BufferCacheHitRatio, Cursors
-- ✅ **ALB Error Source ID** - Distinguish ALB vs target errors
-- ✅ **Multi-Severity Levels** - Info, Warning, Critical
+- ✅ **CloudWatch Metrics Insights SQL** - Tag-based filtering for scalable monitoring
+- ✅ **One Alarm Per Metric** - Warning severity tier, ready for future `_CRITICAL` additions
+- ✅ **Math Expressions** - Computed metrics for Kafka memory and Direct Connect bandwidth
+- ✅ **CWAgent Integration** - EC2 memory, disk, and inode monitoring
 - ✅ **Individual Resource Visibility** - See which specific resource triggered
 
 ---
@@ -64,6 +61,19 @@ pip install boto3 pyyaml
 aws configure
 ```
 
+### CloudWatch Agent (Required for EC2 Memory/Disk Monitoring)
+
+The following EC2 alarms require the CloudWatch Agent to be installed:
+- `mem_used_percent` - Memory utilization
+- `disk_used_percent` - Disk utilization  
+- `disk_inodes_used_percent` - Inode utilization
+
+**Install CloudWatch Agent:**
+- [CloudWatch Agent Installation Guide](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html)
+- [CloudWatch Agent Configuration](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Agent-Configuration-File-Details.html)
+
+Without the CloudWatch Agent, these alarms will show `INSUFFICIENT_DATA` but will not trigger false alerts (configured with `TreatMissingData: notBreaching`).
+
 ### Deploy
 
 ```bash
@@ -78,9 +88,9 @@ aws sns subscribe \
   --region us-east-1
 
 # 3. Deploy all alarms
-python deploy-cloudwatch-alarms.py --mode all \
-  --tag-key businessTag \
-  --tag-value EM-SNC-CLOUD \
+python deploy_alarms.py --mode all \
+  --tag-key Environment \
+  --tag-value Production \
   --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
 ```
@@ -89,67 +99,91 @@ python deploy-cloudwatch-alarms.py --mode all \
 
 ---
 
-## 🔄 Updates
+## 📋 Monitored Services
 
-### Update All Stacks
+### Tag-Based Services (3 services, 10 alarms)
 
-**Re-run the same command** to apply configuration changes:
+Uses CloudWatch Metrics Insights SQL with tag filtering. One alarm monitors ALL tagged resources.
 
-```bash
-python deploy-cloudwatch-alarms.py --mode all \
-  --tag-key businessTag \
-  --tag-value EM-SNC-CLOUD \
-  --sns-topic arn:aws:sns:us-east-1:476114114317:cloudwatchTopic \
-  --region us-east-1
-```
+| Service | Alarms | Metrics | Namespace |
+|---------|--------|---------|-----------|
+| **EC2** | 7 | CPUUtilization (>90%), mem_used_percent* (>90%), disk_used_percent* (>90%), disk_inodes_used_percent* (>90%), StatusCheckFailed_System (>=1), StatusCheckFailed (>=1), StatusCheckFailed_Instance (>=1) | AWS/EC2, CWAgent |
+| **NAT Gateway** | 1 | ErrorPortAllocation (>100) | AWS/NATGateway |
+| **VPN** | 2 | TunnelState connection-level (<1), TunnelState tunnel-level (<1) | AWS/VPN |
 
-**What happens:**
-- ✅ Adds new alarms from updated config
-- ✅ Keeps existing alarms running
-- ✅ Updates modified thresholds
-- ✅ Zero downtime
-- ✅ Auto-rollback on failure
+*\* Requires CloudWatch Agent*
 
-### Update Individual Services
+### Resource-Based Services (4 services)
 
-```bash
-# Update tag-based alarms (EC2, RDS, Redis, EFS + EKS EC2 nodes)
-python deploy-cloudwatch-alarms.py --mode tag-based \
-  --tag-key businessTag --tag-value EM-SNC-CLOUD \
-  --sns-topic arn:aws:sns:us-east-1:476114114317:cloudwatchTopic \
-  --region us-east-1
+Creates dedicated alarms for each discovered resource.
 
-# Update specific service
-python deploy-cloudwatch-alarms.py --mode resource-based \
-  --service docdb --discover-all \
-  --tag-key businessTag --tag-value EM-SNC-CLOUD \
-  --sns-topic arn:aws:sns:us-east-1:476114114317:cloudwatchTopic \
-  --region us-east-1
-```
+| Service | Alarms/Resource | Metrics |
+|---------|-----------------|---------|
+| **Kafka (MSK)** | 5 | MaxOffsetLag (>200000), CpuUser (>90%), MemoryPercent† (>90%), KafkaDataLogsDiskUsed (>75%), ActiveControllerCount (<1) |
+| **ACM** | 1 | DaysToExpiry (<=30 days) |
+| **ALB** | 1 | UnHealthyHostCount (>=1) |
+| **Direct Connect** | 3 | ConnectionState (<1), IngressBandwidthPercent† (>90%), EgressBandwidthPercent† (>90%) |
 
-**Supported services:** `opensearch`, `kafka`, `rabbitmq`, `waf`, `docdb`, `alb`
+*† Uses metric math expressions*
 
 ---
 
-## 📋 Monitored Services
+## 🔄 Usage Examples
 
-| Service | Type | Alarms | Key Metrics |
-|---------|------|--------|-------------|
-| **EC2** | Tag-Based | 11 | CPU, Network, Status Checks |
-| **EKS EC2** | Tag-Based | 11/cluster | CPU, Network, Status Checks (via eks:cluster-name) |
-| **RDS** | Tag-Based | 25 | CPU, Memory, Storage, IOPS, Latency, I/O Queue |
-| **Redis** | Tag-Based | 19 | CPU, Memory, Connections, Evictions, Cache Hit |
-| **EFS** | Tag-Based | 8 | Connections, IO Limit, Burst Credits |
-| **DocumentDB** | Resource | 27/cluster | CPU, Memory, IOPS, Cache Ratios, Cursors |
-| **ALB** | Resource | 18/LB | Connections, Errors, Health, Response Time |
-| **OpenSearch** | Resource | 17/domain | Cluster Health, Shards, CPU, Memory |
-| **Kafka** | Resource | 21/cluster | CPU, Memory, Partitions, Replication |
-| **RabbitMQ** | Resource | 12/broker | CPU, Memory, Messages, Connections |
-| **WAF** | Resource | 2/WebACL | Blocked/Allowed Requests |
+### Deploy All Alarms
 
-**📖 [View Complete Metrics Reference](METRICS_REFERENCE.md)** - Detailed thresholds, descriptions, and AWS recommendations for all metrics.
+```bash
+python deploy_alarms.py --mode all \
+  --tag-key Environment \
+  --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
 
-**All metrics verified against AWS official documentation**
+### Deploy Tag-Based Alarms Only
+
+Deploys EC2, NAT Gateway, and VPN alarms:
+
+```bash
+python deploy_alarms.py --mode tag-based \
+  --tag-key Environment \
+  --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
+### Deploy Resource-Based Alarms
+
+#### Kafka (MSK)
+
+```bash
+python deploy_alarms.py --mode resource-based \
+  --service kafka --discover-all \
+  --tag-key Environment --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
+#### ACM Certificates
+
+```bash
+python deploy_alarms.py --mode resource-based \
+  --service acm --discover-all \
+  --tag-key Environment --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
+#### Direct Connect
+
+```bash
+# Bandwidth is auto-detected from the AWS Direct Connect API
+python deploy_alarms.py --mode resource-based \
+  --service directconnect --discover-all \
+  --tag-key Environment --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
 
 ---
 
@@ -161,8 +195,8 @@ Uses CloudWatch Metrics Insights with `GROUP BY` to monitor multiple resources w
 
 ```sql
 SELECT MAX(CPUUtilization) FROM "AWS/EC2" 
-WHERE tag.businessTag = 'EM-SNC-CLOUD' 
-GROUP BY tag.Name
+WHERE tag.Environment = 'Production' 
+GROUP BY InstanceId ORDER BY MAX() DESC
 ```
 
 **Benefits:**
@@ -173,17 +207,27 @@ GROUP BY tag.Name
 
 ### Resource-Based Alarms
 
-Creates dedicated alarms for each resource:
+Creates dedicated alarms for each resource with support for:
+- **Math Expressions** - Computed metrics (e.g., memory percentage from MemoryUsed and MemoryFree)
+- **Multi-Dimension Metrics** - Alarms with multiple dimensions (e.g., Kafka MaxOffsetLag with Consumer Group and Topic)
+- **Parameterized Calculations** - Bandwidth percentage with configurable capacity
 
-```sql
-SELECT MAX(CPUUtilization) FROM "AWS/DocDB" 
-WHERE DBClusterIdentifier = 'my-cluster'
+---
+
+### Alarm Naming Convention
+
+All alarms use the `_WARNING` suffix to support future severity tiers:
+
+```
+{TagValue}-{Service}-{Resource}-{Metric}_WARNING
 ```
 
-**Use for:**
-- Services without tag-based telemetry support
-- Resources needing granular control
-- Specialized metrics (OpenSearch shards, Kafka partitions)
+Examples:
+- `Production-EC2-CPUUtilization_WARNING`
+- `Production-MSK-mycluster-CpuUser_WARNING`
+- `Production-DirectConnect-dxcon-abc123-ConnectionState_WARNING`
+
+When adding critical-tier alarms later, use `_CRITICAL` with higher thresholds.
 
 ---
 
@@ -195,20 +239,19 @@ Edit `alarm-config-resource-based.yaml`:
 
 ```yaml
 services:
-  docdb:
+  kafka:
     alarms:
-      - metric: CPUUtilization
-        severity: Warning
-        threshold: 80  # Change this
+      - metric: CpuUser
+        threshold: 90  # Change this
         operator: GreaterThanThreshold
 ```
 
 Then redeploy:
 
 ```bash
-python deploy-cloudwatch-alarms.py --mode resource-based --service docdb \
-  --tag-key businessTag --tag-value EM-SNC-CLOUD --discover-all \
-  --sns-topic arn:aws:sns:us-east-1:476114114317:cloudwatchTopic \
+python deploy_alarms.py --mode resource-based --service kafka \
+  --tag-key Environment --tag-value Production --discover-all \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
 ```
 
@@ -237,37 +280,33 @@ A: Yes! Use `--mode resource-based --service <name>`.
 **Q: Is it safe to run daily?**  
 A: Yes! Updates are idempotent and zero-downtime.
 
+**Q: Why do EC2 memory/disk alarms show INSUFFICIENT_DATA?**  
+A: The CloudWatch Agent must be installed on EC2 instances to collect these metrics. See the [CloudWatch Agent Installation Guide](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html).
+
 ---
 
 ## 📁 Files
 
-- `cloudformation-tag-based-alarms.yaml` - Tag-based template (64 alarms)
-- `cloudformation-eks-ec2-alarms.yaml` - EKS EC2 node alarms template (11 alarms per cluster)
-- `alarm-config-resource-based.yaml` - Resource-based config
-- `deploy-cloudwatch-alarms.py` - Deployment script
-- `generate-resource-alarms-simple.py` - Template generator
-- `METRICS_REFERENCE.md` - Complete metrics reference
-- `README.md` - This file
+| File | Description |
+|------|-------------|
+| `cloudformation-tag-based-alarms.yaml` | Tag-based CloudFormation template (10 alarms) |
+| `alarm-config-resource-based.yaml` | Resource-based alarm configuration (Kafka, ACM, ALB, Direct Connect) |
+| `deploy_alarms.py` | Main deployment script |
+| `resource_alarm_builder.py` | Template builder for resource-based alarms |
+| `METRICS_REFERENCE.md` | Detailed metrics reference with thresholds and descriptions |
+| `README.md` | This file |
 
 ---
 
 ## 🏆 Best Practices
 
 1. ✅ **Tag all resources** - Consistent tagging enables auto-discovery
-2. ✅ **One SNS topic per environment** - Separate prod/staging/dev notifications
-3. ✅ **Deploy per region** - CloudWatch alarms are region-specific
-4. ✅ **Test in dev first** - Validate before production
-5. ✅ **Monitor INSUFFICIENT_DATA** - Indicates missing tags
-6. ✅ **Review alarm history** - Tune thresholds based on actual workload
-7. ✅ **Update regularly** - Apply new metrics and threshold adjustments
-
----
-
-## 📚 Documentation
-
-- **Architecture Review:** See `ARCHITECTURE_REVIEW.md` for detailed production readiness assessment
-- **AWS Best Practices:** All metrics validated against official AWS documentation
-- **Threshold Justification:** Based on AWS recommended values
+2. ✅ **Install CloudWatch Agent** - Required for EC2 memory/disk monitoring
+3. ✅ **One SNS topic per environment** - Separate prod/staging/dev notifications
+4. ✅ **Deploy per region** - CloudWatch alarms are region-specific
+5. ✅ **Test in dev first** - Validate before production
+6. ✅ **Monitor INSUFFICIENT_DATA** - Indicates missing tags or CloudWatch Agent
+7. ✅ **Review alarm history** - Tune thresholds based on actual workload
 
 ---
 
@@ -277,32 +316,17 @@ CloudWatch alarms are region-specific. Deploy to each region:
 
 ```bash
 # US East 1
-python deploy-cloudwatch-alarms.py --mode all \
-  --tag-key businessTag --tag-value EM-SNC-CLOUD \
+python deploy_alarms.py --mode all \
+  --tag-key Environment --tag-value Production \
   --sns-topic arn:aws:sns:us-east-1:ACCOUNT:topic \
   --region us-east-1
 
 # AP Southeast 2
-python deploy-cloudwatch-alarms.py --mode all \
-  --tag-key businessTag --tag-value EM-SNC-CLOUD \
+python deploy_alarms.py --mode all \
+  --tag-key Environment --tag-value Production \
   --sns-topic arn:aws:sns:ap-southeast-2:ACCOUNT:topic \
   --region ap-southeast-2
 ```
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Make your changes
-3. Test in dev environment
-4. Submit pull request
-
----
-
-## 📄 License
-
-MIT License - See LICENSE file for details
 
 ---
 
@@ -310,6 +334,7 @@ MIT License - See LICENSE file for details
 
 - [AWS CloudWatch Best Practice Alarms](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Best_Practice_Recommended_Alarms_AWS_Services.html)
 - [CloudWatch Metrics Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/query_with_cloudwatch-metrics-insights.html)
+- [CloudWatch Agent Installation Guide](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html)
 - [Tag-Based Telemetry](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/UsingResourceTagsForTelemetry.html)
 
 ---
