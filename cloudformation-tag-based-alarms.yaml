@@ -45,6 +45,8 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
 
   # EC2 Alarm 2: mem_used_percent (CWAgent)
   EC2MemoryUsedPercentAlarm:
@@ -65,6 +67,8 @@ Resources:
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
         - !Ref SNSTopicArn
 
   # EC2 Alarm 3: disk_used_percent (CWAgent)
@@ -87,6 +91,8 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
 
   # EC2 Alarm 4: disk_inodes_used_percent (CWAgent)
   EC2DiskInodesUsedPercentAlarm:
@@ -107,6 +113,8 @@ Resources:
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
         - !Ref SNSTopicArn
 
   # EC2 Alarm 5: StatusCheckFailed_System
@@ -129,6 +137,8 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
 
   # EC2 Alarm 6: StatusCheckFailed
   EC2StatusCheckFailedAlarm:
@@ -150,6 +160,8 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
 
   # EC2 Alarm 7: StatusCheckFailed_Instance
   EC2StatusCheckFailedInstanceAlarm:
@@ -170,6 +182,8 @@ Resources:
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
         - !Ref SNSTopicArn
 
   # =============================================================================
@@ -196,6 +210,8 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
 
   # =============================================================================
   # VPN Alarms (2 alarms)
@@ -221,6 +237,8 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
 
   # VPN Alarm 2: TunnelState (tunnel-level)
   VPNTunnelStateTunnelAlarm:
@@ -241,6 +259,8 @@ Resources:
       EvaluationPeriods: 2
       TreatMissingData: notBreaching
       AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
         - !Ref SNSTopicArn
 
 Outputs:

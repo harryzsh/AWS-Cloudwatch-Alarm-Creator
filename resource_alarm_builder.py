@@ -82,7 +82,8 @@ def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, 
             'ComparisonOperator': operator,
             'EvaluationPeriods': 2,
             'TreatMissingData': 'notBreaching',
-            'AlarmActions': [{'Ref': 'SNSTopicArn'}]
+            'AlarmActions': [{'Ref': 'SNSTopicArn'}],
+            'OKActions': [{'Ref': 'SNSTopicArn'}]
         }
     }
     
@@ -167,7 +168,8 @@ def generate_math_expression_alarm(service_config, resource_id, alarm_config, ta
             'ComparisonOperator': operator,
             'EvaluationPeriods': 2,
             'TreatMissingData': 'notBreaching',
-            'AlarmActions': [{'Ref': 'SNSTopicArn'}]
+            'AlarmActions': [{'Ref': 'SNSTopicArn'}],
+            'OKActions': [{'Ref': 'SNSTopicArn'}]
         }
     }
     
