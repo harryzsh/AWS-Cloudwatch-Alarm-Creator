@@ -245,7 +245,7 @@ A: Yes! Updates are idempotent and zero-downtime.
 - `cloudformation-eks-ec2-alarms.yaml` - EKS EC2 node alarms template (11 alarms per cluster)
 - `alarm-config-resource-based.yaml` - Resource-based config
 - `deploy-cloudwatch-alarms.py` - Deployment script
-- `generate-resource-alarms-simple.py` - Template generator
+- `generate-resource-alarms.py` - Resource-based template generator
 - `METRICS_REFERENCE.md` - Complete metrics reference
 - `README.md` - This file
 

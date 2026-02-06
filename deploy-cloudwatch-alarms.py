@@ -56,7 +56,7 @@ def validate_prerequisites():
         'cloudformation-tag-based-alarms.yaml',
         'cloudformation-eks-ec2-alarms.yaml',
         'alarm-config-resource-based.yaml',
-        'generate-resource-based-template.py'
+        'generate-resource-alarms.py'
     ]
     
     for file in required_files:
@@ -397,7 +397,7 @@ def generate_resource_based_template(service: str, resource_ids: List[str], tag_
     
     # Use simple YAML generator (no CDK required)
     cmd = [
-        'python', 'generate-resource-alarms-simple.py',
+        'python', 'generate-resource-alarms.py',
         '--service', service,
         '--tag-value', tag_value,
         '--resources'] + resource_ids
