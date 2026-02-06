@@ -250,10 +250,17 @@ def discover_acm_certificates(region: str, tag_key: str, tag_value: str) -> List
     try:
         client = boto3.client('acm', region_name=region)
         
-        # List all certificates
+        # List all certificates — must include all key types or ACM only returns RSA_1024
         paginator = client.get_paginator('list_certificates')
         all_certificates = []
-        for page in paginator.paginate():
+        for page in paginator.paginate(
+            Includes={
+                'keyTypes': [
+                    'RSA_1024', 'RSA_2048', 'RSA_3072', 'RSA_4096',
+                    'EC_prime256v1', 'EC_secp384r1', 'EC_secp521r1'
+                ]
+            }
+        ):
             all_certificates.extend(page.get('CertificateSummaryList', []))
         
         # Filter by tags

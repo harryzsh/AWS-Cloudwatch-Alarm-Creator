@@ -14,6 +14,7 @@ Features:
 """
 import yaml
 import argparse
+import hashlib
 
 
 class _NoAliasDumper(yaml.SafeDumper):
@@ -22,7 +23,20 @@ class _NoAliasDumper(yaml.SafeDumper):
         return True
 
 
-def generate_simple_alarm(service_config, resource_id, alarm_config, alarm_index, tag_value, extra_dim_values=None):
+def _stable_resource_name(service_name_clean, resource_id, metric_name):
+    """Generate a stable CloudFormation logical ID from resource_id + metric.
+    
+    Uses a short hash of the resource_id to avoid name collisions and ensure
+    adding/removing resources doesn't shift existing logical IDs.
+    """
+    # Hash the resource_id to get a short stable suffix (8 hex chars)
+    resource_hash = hashlib.md5(resource_id.encode()).hexdigest()[:8]
+    # Clean metric name for use in logical ID
+    metric_clean = metric_name.replace('.', '').replace('_', '')
+    return f"{service_name_clean}{metric_clean}{resource_hash}"
+
+
+def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, extra_dim_values=None):
     """Generate alarm using Metrics Insights SQL query (for non-math-expression alarms)"""
     
     metric_name = alarm_config['metric']
@@ -30,9 +44,9 @@ def generate_simple_alarm(service_config, resource_id, alarm_config, alarm_index
     operator = alarm_config['operator']
     description = alarm_config['description']
     
-    # Create valid CloudFormation resource name (alphanumeric only)
+    # Create stable CloudFormation resource name from resource_id + metric
     service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
-    resource_name = f"{service_name_clean}Alarm{alarm_index}"
+    resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name)
     
     # Use tag-value based naming with resource name included
     service_short = service_config['name'].split('(')[0].strip().replace(' ', '')  # "MSK" from "MSK (Kafka)"
@@ -75,7 +89,7 @@ def generate_simple_alarm(service_config, resource_id, alarm_config, alarm_index
     return resource_name, alarm
 
 
-def generate_math_expression_alarm(service_config, resource_id, alarm_config, alarm_index, tag_value, bandwidth=None, extra_dim_values=None):
+def generate_math_expression_alarm(service_config, resource_id, alarm_config, tag_value, bandwidth=None, extra_dim_values=None):
     """Generate alarm using CloudFormation metric math expressions"""
     
     metric_name = alarm_config['metric']
@@ -86,9 +100,9 @@ def generate_math_expression_alarm(service_config, resource_id, alarm_config, al
     math_metrics = alarm_config['math_metrics']
     extra_dimensions = alarm_config.get('extra_dimensions', [])
     
-    # Create valid CloudFormation resource name (alphanumeric only)
+    # Create stable CloudFormation resource name from resource_id + metric
     service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
-    resource_name = f"{service_name_clean}Alarm{alarm_index}"
+    resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name)
     
     # Use tag-value based naming with resource name included
     service_short = service_config['name'].split('(')[0].strip().replace(' ', '')
@@ -160,16 +174,16 @@ def generate_math_expression_alarm(service_config, resource_id, alarm_config, al
     return resource_name, alarm
 
 
-def generate_alarm(service_config, resource_id, alarm_config, alarm_index, tag_value, bandwidth=None, extra_dim_values=None):
+def generate_alarm(service_config, resource_id, alarm_config, tag_value, bandwidth=None, extra_dim_values=None):
     """Generate alarm - dispatches to appropriate generator based on alarm type"""
     
     if 'math_expression' in alarm_config:
         return generate_math_expression_alarm(
-            service_config, resource_id, alarm_config, alarm_index, tag_value, bandwidth, extra_dim_values
+            service_config, resource_id, alarm_config, tag_value, bandwidth, extra_dim_values
         )
     else:
         return generate_simple_alarm(
-            service_config, resource_id, alarm_config, alarm_index, tag_value, extra_dim_values
+            service_config, resource_id, alarm_config, tag_value, extra_dim_values
         )
 
 
@@ -215,7 +229,7 @@ def build_template(service: str, resource_ids: list, tag_value: str, bandwidth: 
     for resource_id in resource_ids:
         for alarm_config in service_config['alarms']:
             resource_name, alarm = generate_alarm(
-                service_config, resource_id, alarm_config, alarm_index,
+                service_config, resource_id, alarm_config,
                 tag_value, bandwidth
             )
             template['Resources'][resource_name] = alarm
