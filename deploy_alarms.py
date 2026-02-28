@@ -25,7 +25,7 @@ class _NoAliasDumper(yaml.SafeDumper):
 # Tag-based: EC2, NAT Gateway, VPN (deployed via cloudformation-tag-based-alarms.yaml)
 # Resource-based: Kafka, ACM, ALB, Direct Connect (generated per-resource by resource_alarm_builder)
 TAG_BASED_SERVICES = ['ec2', 'nat-gateway', 'vpn']
-RESOURCE_BASED_SERVICES = ['kafka', 'acm', 'alb', 'directconnect']
+RESOURCE_BASED_SERVICES = ['ec2', 'kafka', 'acm', 'alb', 'directconnect', 'ebs']
 
 # ANSI color codes for terminal output
 RED = '\033[91m'
@@ -388,6 +388,115 @@ def discover_dx_connections(region: str, tag_key: str, tag_value: str) -> List[D
         return []
 
 
+def discover_ec2_instances(region: str, tag_key: str, tag_value: str) -> List[Dict]:
+    """Discover EC2 instances filtered by tags, then verify CWAgent is publishing metrics.
+    
+    Returns list of dicts with 'instance_id' and 'name' keys.
+    Only returns instances that have published mem_used_percent to CWAgent namespace.
+    """
+    
+    print(f"🔍 Discovering EC2 instances with tag {tag_key}={tag_value} in {region}...")
+    
+    try:
+        ec2_client = boto3.client('ec2', region_name=region)
+        cw_client = boto3.client('cloudwatch', region_name=region)
+        
+        # Step 1: Find tagged EC2 instances
+        paginator = ec2_client.get_paginator('describe_instances')
+        all_instances = []
+        for page in paginator.paginate(
+            Filters=[
+                {'Name': f'tag:{tag_key}', 'Values': [tag_value]},
+                {'Name': 'instance-state-name', 'Values': ['running', 'stopped']}
+            ]
+        ):
+            for reservation in page.get('Reservations', []):
+                for instance in reservation.get('Instances', []):
+                    instance_id = instance['InstanceId']
+                    name = instance_id
+                    for tag in instance.get('Tags', []):
+                        if tag['Key'] == 'Name':
+                            name = tag['Value']
+                            break
+                    all_instances.append({'instance_id': instance_id, 'name': name})
+        
+        if not all_instances:
+            print(f"   Found 0 EC2 instances with tag {tag_key}={tag_value}")
+            return []
+        
+        print(f"   Found {len(all_instances)} EC2 instance(s) — checking for CWAgent metrics...")
+        
+        # Step 2: Filter to instances that have CWAgent mem_used_percent data
+        cwagent_instances = []
+        for inst in all_instances:
+            result = cw_client.list_metrics(
+                Namespace='CWAgent',
+                MetricName='mem_used_percent',
+                Dimensions=[{'Name': 'InstanceId', 'Value': inst['instance_id']}]
+            )
+            if result.get('Metrics'):
+                cwagent_instances.append(inst)
+            else:
+                print(f"   ⚠ {inst['name']} ({inst['instance_id']}) — no CWAgent data, skipping")
+        
+        print(f"   Found {len(cwagent_instances)} instance(s) with CWAgent enabled")
+        return cwagent_instances
+    
+    except Exception as e:
+        print(f"✗ Error discovering EC2 instances: {e}")
+        return []
+
+
+def discover_ebs_volumes(region: str, tag_key: str, tag_value: str) -> List[str]:
+    """Discover EBS volumes attached to tagged EC2 instances.
+    
+    Finds EC2 instances with the specified tag, then collects all attached
+    EBS volumes. Only returns volumes in 'in-use' state.
+    """
+    
+    print(f"🔍 Discovering EBS volumes attached to EC2 instances with tag {tag_key}={tag_value} in {region}...")
+    
+    try:
+        client = boto3.client('ec2', region_name=region)
+        
+        # Step 1: Find tagged EC2 instances
+        paginator = client.get_paginator('describe_instances')
+        instance_ids = []
+        for page in paginator.paginate(
+            Filters=[
+                {'Name': f'tag:{tag_key}', 'Values': [tag_value]},
+                {'Name': 'instance-state-name', 'Values': ['running', 'stopped']}
+            ]
+        ):
+            for reservation in page.get('Reservations', []):
+                for instance in reservation.get('Instances', []):
+                    instance_ids.append(instance['InstanceId'])
+        
+        if not instance_ids:
+            print(f"   Found 0 EC2 instances with tag {tag_key}={tag_value}")
+            return []
+        
+        print(f"   Found {len(instance_ids)} EC2 instance(s) with tag {tag_key}={tag_value}")
+        
+        # Step 2: Get all EBS volumes attached to those instances
+        volume_ids = []
+        for page in client.get_paginator('describe_volumes').paginate(
+            Filters=[
+                {'Name': 'attachment.instance-id', 'Values': instance_ids},
+                {'Name': 'status', 'Values': ['in-use']}
+            ]
+        ):
+            for volume in page.get('Volumes', []):
+                volume_ids.append(volume['VolumeId'])
+        
+        print(f"   Found {len(volume_ids)} EBS volume(s) attached to tagged instances")
+        return volume_ids
+    
+    except Exception as e:
+        print(f"✗ Error discovering EBS volumes: {e}")
+        return []
+
+
 def discover_resources(service: str, region: str, tag_key: str, tag_value: str):
     """Discover resources of a service type filtered by tags.
     
@@ -398,7 +507,9 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str):
     print(f"🔍 Discovering {service} resources with tag {tag_key}={tag_value} in {region}...")
     
     try:
-        if service == 'kafka':
+        if service == 'ec2':
+            return discover_ec2_instances(region, tag_key, tag_value)        
+        elif service == 'kafka':
             client = boto3.client('kafka', region_name=region)
             response = client.list_clusters()
             all_clusters = response['ClusterInfoList']
@@ -422,6 +533,9 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str):
         
         elif service == 'directconnect':
             return discover_dx_connections(region, tag_key, tag_value)
+        
+        elif service == 'ebs':
+            return discover_ebs_volumes(region, tag_key, tag_value)
         
         else:
             raise ValueError(f"Unsupported service: {service}")
@@ -592,7 +706,7 @@ Examples:
                         help='Deployment mode')
     parser.add_argument('--service',
                         choices=RESOURCE_BASED_SERVICES,
-                        help='Service for resource-based mode')
+                        help='Service for resource-based mode (kafka, acm, alb, directconnect, ebs)')
     parser.add_argument('--tag-key', required=True,
                         help='Tag key to filter resources (REQUIRED)')
     parser.add_argument('--tag-value', required=True,
@@ -630,7 +744,7 @@ Examples:
     
     # Deploy based on mode
     if args.mode == 'tag-based':
-        # Deploy tag-based alarms (EC2, NAT Gateway, ALB, VPN)
+        # Deploy tag-based alarms (EC2, NAT Gateway, VPN)
         result = deploy_tag_based_alarms(
             args.tag_key,
             args.tag_value,
@@ -639,6 +753,19 @@ Examples:
             args.stack_name
         )
         results.append(result)
+        
+        # Always also deploy EC2 resource-based alarms (CWAgent metrics)
+        print(f"\n--- EC2 (CWAgent) ---")
+        ec2_instances = discover_resources('ec2', args.region, args.tag_key, args.tag_value)
+        if ec2_instances:
+            # EC2 returns dicts with instance_id and name
+            resource_ids = [f"{d['name']}|{d['instance_id']}" for d in ec2_instances]
+            result = deploy_resource_based_alarms(
+                'ec2', resource_ids, args.sns_topic, args.region, args.tag_value
+            )
+            results.append(result)
+        else:
+            print(f"{RED}  No EC2 instances found with tag {args.tag_key}={args.tag_value} — skipping{RESET}")
     
     elif args.mode == 'resource-based':
         # Get resource IDs via tag-based discovery or manual list
@@ -689,7 +816,7 @@ Examples:
         
         # Deploy resource-based for each service
         print("\n" + "=" * 60)
-        print("PHASE 2: Resource-Based Alarms (Kafka, ACM, ALB, Direct Connect)")
+        print("PHASE 2: Resource-Based Alarms (EC2 CWAgent, Kafka, ACM, ALB, Direct Connect, EBS)")
         print("=" * 60)
         
         for service in RESOURCE_BASED_SERVICES:
@@ -697,10 +824,14 @@ Examples:
             discovered = discover_resources(service, args.region, args.tag_key, args.tag_value)
             
             # Direct Connect returns dicts with connection_id and bandwidth_bps
+            # EC2 returns dicts with instance_id and name
             if service == 'directconnect' and discovered and isinstance(discovered[0], dict):
                 resource_ids = [d['connection_id'] for d in discovered]
                 bandwidth = discovered[0]['bandwidth_bps']
                 print(f"   Auto-detected bandwidth: {bandwidth:,} bps")
+            elif service == 'ec2' and discovered and isinstance(discovered[0], dict):
+                resource_ids = [f"{d['name']}|{d['instance_id']}" for d in discovered]
+                bandwidth = None
             else:
                 resource_ids = discovered
                 bandwidth = None

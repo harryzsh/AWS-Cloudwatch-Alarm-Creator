@@ -50,7 +50,6 @@ def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, 
     
     # Use tag-value based naming with resource name included
     service_short = service_config['name'].split('(')[0].strip().replace(' ', '')  # "MSK" from "MSK (Kafka)"
-    alarm_name = f"{tag_value}-{service_short}-{resource_id}-{metric_name}_WARNING"
     
     # Quote metric names with dots to avoid syntax errors
     if '.' in metric_name:
@@ -65,7 +64,14 @@ def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, 
     else:
         dimension_name_quoted = dimension_name
     
-    expression = f'SELECT max({metric_name_quoted}) FROM "{service_config["namespace"]}" WHERE {dimension_name_quoted} = \'{resource_id}\''
+    # For EC2 CWAgent alarms, resource_id may be 'name|instance_id' — use instance_id for query
+    query_id = resource_id
+    display_id = resource_id
+    if '|' in resource_id:
+        display_id, query_id = resource_id.split('|', 1)
+    
+    expression = f'SELECT max({metric_name_quoted}) FROM "{service_config["namespace"]}" WHERE {dimension_name_quoted} = \'{query_id}\''
+    alarm_name = f"{tag_value}-{service_short}-{display_id}-{metric_name}_WARNING"
     
     alarm = {
         'Type': 'AWS::CloudWatch::Alarm',
@@ -242,8 +248,8 @@ def build_template(service: str, resource_ids: list, tag_value: str, bandwidth: 
 
 def main():
     parser = argparse.ArgumentParser(description='Generate resource-based alarm template')
-    parser.add_argument('--service', required=True, choices=['kafka', 'acm', 'alb', 'directconnect'],
-                        help='Service type: kafka, acm, or directconnect')
+    parser.add_argument('--service', required=True, choices=['ec2', 'kafka', 'acm', 'alb', 'directconnect', 'ebs'],
+                        help='Service type: ec2, kafka, acm, alb, directconnect, or ebs')
     parser.add_argument('--tag-value', required=True, help='Tag value for alarm naming')
     parser.add_argument('--resources', nargs='+', required=True, help='Resource IDs')
     parser.add_argument('--bandwidth', type=int, help='Connection bandwidth in bps (auto-detected for directconnect, optional manual override)')

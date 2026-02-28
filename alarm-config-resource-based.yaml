@@ -4,6 +4,21 @@
 # One alarm per metric - _WARNING severity tier
 
 services:
+  ec2:
+    name: EC2
+    namespace: CWAgent
+    dimension_name: InstanceId
+    alarms:
+      - metric: mem_used_percent
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: EC2实例内存使用率超过90% (需要CloudWatch Agent)
+
+      - metric: disk_used_percent
+        threshold: 90
+        operator: GreaterThanThreshold
+        description: EC2实例磁盘使用率超过90% (需要CloudWatch Agent)
+
   kafka:
     name: MSK (Kafka)
     namespace: AWS/Kafka
@@ -81,3 +96,23 @@ services:
         operator: GreaterThanThreshold
         description: Direct Connect出站带宽使用百分比
         bandwidth_parameter: true
+
+  ebs:
+    name: EBS
+    namespace: AWS/EBS
+    dimension_name: VolumeId
+    alarms:
+      - metric: VolumeThroughputExceededCheck
+        threshold: 1
+        operator: GreaterThanOrEqualToThreshold
+        description: EBS卷吞吐量超过预置限制
+
+      - metric: VolumeIOPSExceededCheck
+        threshold: 1
+        operator: GreaterThanOrEqualToThreshold
+        description: EBS卷IOPS超过预置限制
+
+      - metric: VolumeStalledIOCheck
+        threshold: 1
+        operator: GreaterThanOrEqualToThreshold
+        description: EBS卷IO停滞检测

@@ -25,27 +25,30 @@ python deploy_alarms.py --mode all \
 
 ```
 Tag-Based Stack (1):
-├─ 10 alarms for EC2, NAT Gateway, VPN
-│  ├─ EC2: CPU, Memory*, Disk*, Inodes*, Status Checks (7 alarms)
+├─ 9 alarms for EC2, NAT Gateway, VPN
+│  ├─ EC2: CPU, Status Checks x3, EBS Throughput Exceeded, EBS IOPS Exceeded (6 alarms)
 │  ├─ NAT Gateway: Port Allocation Errors (1 alarm)
-│  ├─ │  └─ VPN: Tunnel State - Connection & Tunnel level (2 alarms)
-│
-│  * Requires CloudWatch Agent installed on EC2 instances
+│  └─ VPN: Tunnel State - Connection & Tunnel level (2 alarms)
 
-Resource-Based Stacks (4):
-├─ Kafka (MSK): 5 alarms per cluster (MaxOffsetLag, CPU, Memory, Disk, Controller)
+Resource-Based Stacks (6):
+├─ EC2 (CWAgent): 2 alarms per instance (mem_used_percent, disk_used_percent)
+├─ Kafka (MSK): 5 alarms per cluster (MaxOffsetLag, CPU, HeapMemory, Disk, Controller)
 ├─ ACM: 1 alarm per certificate (DaysToExpiry)
 ├─ ALB: 1 alarm per load balancer (UnHealthyHostCount)
-└─ Direct Connect: 3 alarms per connection (ConnectionState, Ingress/Egress Bandwidth)
+├─ Direct Connect: 3 alarms per connection (ConnectionState, Ingress/Egress Bandwidth)
+└─ EBS: 3 alarms per volume (ThroughputExceeded, IOPSExceeded, StalledIO)
 ```
+
+Note: EC2 CWAgent alarms are auto-deployed with both `--mode tag-based` and `--mode all`.
 
 ### Key Features
 
 - ✅ **CloudWatch Metrics Insights SQL** - Tag-based filtering for scalable monitoring
-- ✅ **One Alarm Per Metric** - Warning severity tier, ready for future `_CRITICAL` additions
-- ✅ **Math Expressions** - Computed metrics for Kafka memory and Direct Connect bandwidth
-- ✅ **CWAgent Integration** - EC2 memory, disk, and inode monitoring
-- ✅ **Individual Resource Visibility** - See which specific resource triggered
+- ✅ **_WARNING severity tier** - Ready for future `_CRITICAL` additions
+- ✅ **OKActions** - Notified on both alarm trigger and recovery
+- ✅ **Math Expressions** - Computed metrics for Direct Connect bandwidth
+- ✅ **CWAgent Integration** - Per-instance EC2 memory, disk, and inode monitoring
+- ✅ **Stable CloudFormation IDs** - Hash-based logical IDs prevent update collisions
 
 ---
 
@@ -63,16 +66,14 @@ aws configure
 
 ### CloudWatch Agent (Required for EC2 Memory/Disk Monitoring)
 
-The following EC2 alarms require the CloudWatch Agent to be installed:
-- `mem_used_percent` - Memory utilization
-- `disk_used_percent` - Disk utilization  
-- `disk_inodes_used_percent` - Inode utilization
+EC2 memory and disk alarms are deployed as resource-based alarms per instance (not tag-based, since CWAgent doesn't support tag filtering in Metrics Insights). They are auto-discovered and deployed alongside the tag-based stack. Instances without CWAgent are automatically skipped — no manual filtering needed.
+
+Required metrics: `mem_used_percent`, `disk_used_percent`
 
 **Install CloudWatch Agent:**
 - [CloudWatch Agent Installation Guide](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html)
-- [CloudWatch Agent Configuration](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Agent-Configuration-File-Details.html)
 
-Without the CloudWatch Agent, these alarms will show `INSUFFICIENT_DATA` but will not trigger false alerts (configured with `TreatMissingData: notBreaching`).
+Without the CloudWatch Agent, these alarms will show `INSUFFICIENT_DATA` but will not trigger false alerts (`TreatMissingData: notBreaching`).
 
 ### Deploy
 
@@ -101,30 +102,28 @@ python deploy_alarms.py --mode all \
 
 ## 📋 Monitored Services
 
-### Tag-Based Services (3 services, 10 alarms)
+### Tag-Based Services (3 services, 9 alarms)
 
 Uses CloudWatch Metrics Insights SQL with tag filtering. One alarm monitors ALL tagged resources.
 
 | Service | Alarms | Metrics | Namespace |
 |---------|--------|---------|-----------|
-| **EC2** | 7 | CPUUtilization (>90%), mem_used_percent* (>90%), disk_used_percent* (>90%), disk_inodes_used_percent* (>90%), StatusCheckFailed_System (>=1), StatusCheckFailed (>=1), StatusCheckFailed_Instance (>=1) | AWS/EC2, CWAgent |
+| **EC2** | 6 | CPUUtilization (>90%), StatusCheckFailed_System (>=1), StatusCheckFailed (>=1), StatusCheckFailed_Instance (>=1), InstanceEBSThroughputExceededCheck (>=1), InstanceEBSIOPSExceededCheck (>=1) | AWS/EC2 |
 | **NAT Gateway** | 1 | ErrorPortAllocation (>100) | AWS/NATGateway |
 | **VPN** | 2 | TunnelState connection-level (<1), TunnelState tunnel-level (<1) | AWS/VPN |
 
-*\* Requires CloudWatch Agent*
+### Resource-Based Services (6 services)
 
-### Resource-Based Services (4 services)
+Creates dedicated alarms per discovered resource. EC2 is always auto-deployed alongside tag-based.
 
-Creates dedicated alarms for each discovered resource.
-
-| Service | Alarms/Resource | Metrics |
-|---------|-----------------|---------|
-| **Kafka (MSK)** | 5 | MaxOffsetLag (>200000), CpuUser (>90%), MemoryPercent† (>90%), KafkaDataLogsDiskUsed (>75%), ActiveControllerCount (<1) |
-| **ACM** | 1 | DaysToExpiry (<=30 days) |
-| **ALB** | 1 | UnHealthyHostCount (>=1) |
-| **Direct Connect** | 3 | ConnectionState (<1), IngressBandwidthPercent† (>90%), EgressBandwidthPercent† (>90%) |
-
-*† Uses metric math expressions*
+| Service | Alarms/Resource | Metrics | Discovery |
+|---------|-----------------|---------|-----------|
+| **EC2 (CWAgent)** | 2 | mem_used_percent (>90%), disk_used_percent (>90%) | Tagged EC2 instances with CWAgent verified via list_metrics |
+| **Kafka (MSK)** | 5 | MaxOffsetLag (>200000), CpuUser (>90%), HeapMemoryAfterGC (>90%), KafkaDataLogsDiskUsed (>75%), ActiveControllerCount (<1) | Tagged MSK clusters |
+| **ACM** | 1 | DaysToExpiry (<=30 days) | Tagged certificates |
+| **ALB** | 1 | UnHealthyHostCount (>=1) | Tagged load balancers |
+| **Direct Connect** | 3 | ConnectionState (<1), IngressBandwidthPercent (>90%), EgressBandwidthPercent (>90%) | Tagged DX connections |
+| **EBS** | 3 | VolumeThroughputExceededCheck (>=1), VolumeIOPSExceededCheck (>=1), VolumeStalledIOCheck (>=1) | Volumes attached to tagged EC2s |
 
 ---
 

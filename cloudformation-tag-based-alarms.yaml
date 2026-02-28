@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+﻿AWSTemplateFormatVersion: '2010-09-09'
 Description: Tag-Based CloudWatch Alarms for EC2, NAT Gateway, and VPN (10 alarms)
 
 Parameters:
@@ -30,7 +30,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-CPUUtilization_WARNING"
-      AlarmDescription: 服务器CPU使用率超过90%
+      AlarmDescription: 鏈嶅姟鍣–PU浣跨敤鐜囪秴杩?0%
       Metrics:
         - Id: m1
           ReturnData: true
@@ -48,81 +48,12 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # EC2 Alarm 2: mem_used_percent (CWAgent)
-  EC2MemoryUsedPercentAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-EC2-MemoryUsedPercent_WARNING"
-      AlarmDescription: 服务器内存使用率超过90% (需要CloudWatch Agent)
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(mem_used_percent) FROM "CWAgent"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY tag.Name ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # EC2 Alarm 3: disk_used_percent (CWAgent)
-  EC2DiskUsedPercentAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-EC2-DiskUsedPercent_WARNING"
-      AlarmDescription: 服务器磁盘使用率超过90% (需要CloudWatch Agent)
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(disk_used_percent) FROM "CWAgent"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY tag.Name ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # EC2 Alarm 4: disk_inodes_used_percent (CWAgent)
-  EC2DiskInodesUsedPercentAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-EC2-DiskInodesUsedPercent_WARNING"
-      AlarmDescription: 服务器磁盘inode使用率超过90% (需要CloudWatch Agent)
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(disk_inodes_used_percent) FROM "CWAgent"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY tag.Name ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 90
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # EC2 Alarm 5: StatusCheckFailed_System
+  # EC2 Alarm 2: StatusCheckFailed_System
   EC2StatusCheckFailedSystemAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedSystem_WARNING"
-      AlarmDescription: EC2系统状态检查失败 - AWS基础设施问题
+      AlarmDescription: EC2绯荤粺鐘舵€佹鏌ュけ璐?- AWS鍩虹璁炬柦闂
       Metrics:
         - Id: m1
           ReturnData: true
@@ -140,12 +71,12 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # EC2 Alarm 6: StatusCheckFailed
+  # EC2 Alarm 3: StatusCheckFailed
   EC2StatusCheckFailedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailed_WARNING"
-      AlarmDescription: EC2状态检查失败 - 系统或实例问题
+      AlarmDescription: EC2鐘舵€佹鏌ュけ璐?- 绯荤粺鎴栧疄渚嬮棶棰?
       Metrics:
         - Id: m1
           ReturnData: true
@@ -163,12 +94,12 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # EC2 Alarm 7: StatusCheckFailed_Instance
+  # EC2 Alarm 4: StatusCheckFailed_Instance
   EC2StatusCheckFailedInstanceAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedInstance_WARNING"
-      AlarmDescription: EC2实例状态检查失败 - 实例配置问题
+      AlarmDescription: EC2瀹炰緥鐘舵€佹鏌ュけ璐?- 瀹炰緥閰嶇疆闂
       Metrics:
         - Id: m1
           ReturnData: true
@@ -195,7 +126,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-NATGateway-ErrorPortAllocation_WARNING"
-      AlarmDescription: NAT网关端口分配错误超过100次
+      AlarmDescription: NAT缃戝叧绔彛鍒嗛厤閿欒瓒呰繃100娆?
       Metrics:
         - Id: m1
           ReturnData: true
@@ -222,7 +153,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-VPN-TunnelState-Connection_WARNING"
-      AlarmDescription: VPN连接隧道状态异常 - 连接级别监控
+      AlarmDescription: VPN杩炴帴闅ч亾鐘舵€佸紓甯?- 杩炴帴绾у埆鐩戞帶
       Metrics:
         - Id: m1
           ReturnData: true
@@ -245,7 +176,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-VPN-TunnelState-Tunnel_WARNING"
-      AlarmDescription: VPN隧道状态异常 - 隧道级别监控
+      AlarmDescription: VPN闅ч亾鐘舵€佸紓甯?- 闅ч亾绾у埆鐩戞帶
       Metrics:
         - Id: m1
           ReturnData: true
@@ -263,14 +194,64 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
+  # =============================================================================
+  # EC2 EBS Alarms (2 alarms)
+  # =============================================================================
+
+  # EC2 EBS Alarm 1: InstanceEBSThroughputExceededCheck
+  EC2EBSThroughputExceededAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-EC2-InstanceEBSThroughputExceededCheck_WARNING"
+      AlarmDescription: EC2瀹炰緥EBS鍚炲悙閲忚秴杩囧疄渚嬫渶澶ч檺鍒?(浠呴€傜敤浜嶯itro瀹炰緥)
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(InstanceEBSThroughputExceededCheck) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
+  # EC2 EBS Alarm 2: InstanceEBSIOPSExceededCheck
+  EC2EBSIOPSExceededAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-EC2-InstanceEBSIOPSExceededCheck_WARNING"
+      AlarmDescription: EC2瀹炰緥EBS IOPS瓒呰繃瀹炰緥鏈€澶ч檺鍒?(浠呴€傜敤浜嶯itro瀹炰緥)
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(InstanceEBSIOPSExceededCheck) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
 Outputs:
   AlarmCount:
     Description: Total number of alarms in this template
-    Value: "10"
+    Value: "12"
 
   EC2AlarmCount:
     Description: Number of EC2 alarms
-    Value: "7"
+    Value: "9"
 
   NATGatewayAlarmCount:
     Description: Number of NAT Gateway alarms
@@ -287,3 +268,4 @@ Outputs:
   TagBasedServices:
     Description: Services monitored by this tag-based template
     Value: "EC2, NAT Gateway, VPN"
+
