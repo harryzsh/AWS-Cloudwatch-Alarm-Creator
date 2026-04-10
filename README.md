@@ -25,18 +25,21 @@ python deploy_alarms.py --mode all \
 
 ```
 Tag-Based Stack (1):
-├─ 9 alarms for EC2, NAT Gateway, VPN
-│  ├─ EC2: CPU, Status Checks x3, EBS Throughput Exceeded, EBS IOPS Exceeded (6 alarms)
-│  ├─ NAT Gateway: Port Allocation Errors (1 alarm)
-│  └─ VPN: Tunnel State - Connection & Tunnel level (2 alarms)
+├─ 10 alarms for EC2, NAT Gateway, VPN
+│  ├─ EC2: CPU WARNING/CRITICAL, StatusCheckFailed_System CRITICAL, StatusCheckFailed_Instance CRITICAL, EBS Throughput WARNING, EBS IOPS WARNING (6 alarms)
+│  ├─ NAT Gateway: ErrorPortAllocation WARNING, PacketsDropCount WARNING (2 alarms)
+│  └─ VPN: TunnelState Connection CRITICAL, TunnelState Tunnel CRITICAL (2 alarms)
 
-Resource-Based Stacks (6):
-├─ EC2 (CWAgent): 2 alarms per instance (mem_used_percent, disk_used_percent)
-├─ Kafka (MSK): 5 alarms per cluster (MaxOffsetLag, CPU, HeapMemory, Disk, Controller)
-├─ ACM: 1 alarm per certificate (DaysToExpiry)
-├─ ALB: 1 alarm per load balancer (UnHealthyHostCount)
-├─ Direct Connect: 3 alarms per connection (ConnectionState, Ingress/Egress Bandwidth)
-└─ EBS: 3 alarms per volume (ThroughputExceeded, IOPSExceeded, StalledIO)
+Resource-Based Stacks (7):
+├─ EC2 (CWAgent): up to 4 alarms per instance (mem WARNING/CRITICAL, disk WARNING/CRITICAL)
+├─ Kafka (MSK): up to 7 alarms per cluster (MaxOffsetLag WARNING/CRITICAL, CPU, HeapMemory, Disk WARNING/CRITICAL, Controller CRITICAL)
+├─ ACM: 1 alarm per certificate (DaysToExpiry WARNING)
+├─ ALB: 1 alarm per load balancer (UnHealthyHostCount WARNING)
+├─ NLB: 1 alarm per load balancer (UnHealthyHostCount WARNING)
+├─ Direct Connect: up to 5 alarms per connection (ConnectionState CRITICAL, Ingress/Egress WARNING/CRITICAL)
+├─ EBS: 3 alarms per volume (ThroughputExceeded, IOPSExceeded, StalledIO WARNING)
+├─ EFS: up to 2 alarms per file system (PercentIOLimit WARNING/CRITICAL)
+└─ NAT: 2 alarms per gateway (PacketsDropCount, ErrorPortAllocation WARNING)
 ```
 
 Note: EC2 CWAgent alarms are auto-deployed with both `--mode tag-based` and `--mode all`.
@@ -68,7 +71,7 @@ aws configure
 
 EC2 memory and disk alarms are deployed as resource-based alarms per instance (not tag-based, since CWAgent doesn't support tag filtering in Metrics Insights). They are auto-discovered and deployed alongside the tag-based stack. Instances without CWAgent are automatically skipped — no manual filtering needed.
 
-Required metrics: `mem_used_percent`, `disk_used_percent`
+Required metrics: `mem_used_percent`, `disk_used_percent` (WARNING >85%, CRITICAL >95%)
 
 **Install CloudWatch Agent:**
 - [CloudWatch Agent Installation Guide](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html)
@@ -102,28 +105,31 @@ python deploy_alarms.py --mode all \
 
 ## 📋 Monitored Services
 
-### Tag-Based Services (3 services, 9 alarms)
+### Tag-Based Services (3 services, 10 alarms)
 
 Uses CloudWatch Metrics Insights SQL with tag filtering. One alarm monitors ALL tagged resources.
 
-| Service | Alarms | Metrics | Namespace |
-|---------|--------|---------|-----------|
-| **EC2** | 6 | CPUUtilization (>90%), StatusCheckFailed_System (>=1), StatusCheckFailed (>=1), StatusCheckFailed_Instance (>=1), InstanceEBSThroughputExceededCheck (>=1), InstanceEBSIOPSExceededCheck (>=1) | AWS/EC2 |
-| **NAT Gateway** | 1 | ErrorPortAllocation (>100) | AWS/NATGateway |
-| **VPN** | 2 | TunnelState connection-level (<1), TunnelState tunnel-level (<1) | AWS/VPN |
+| Service | Alarms | Metrics | Severity |
+|---------|--------|---------|----------|
+| **EC2** | 6 | CPUUtilization, StatusCheckFailed_System, StatusCheckFailed_Instance, InstanceEBSThroughputExceededCheck, InstanceEBSIOPSExceededCheck | CPU: WARNING(>90%) + CRITICAL(>98%); Status checks: CRITICAL(≥1); EBS: WARNING(≥1) |
+| **NAT Gateway** | 2 | ErrorPortAllocation, PacketsDropCount | WARNING(>100) |
+| **VPN** | 2 | TunnelState connection-level, TunnelState tunnel-level | CRITICAL(<1) |
 
-### Resource-Based Services (6 services)
+### Resource-Based Services (9 services)
 
-Creates dedicated alarms per discovered resource. EC2 is always auto-deployed alongside tag-based.
+Creates dedicated alarms per discovered resource. EC2 CWAgent is auto-deployed alongside tag-based.
 
-| Service | Alarms/Resource | Metrics | Discovery |
-|---------|-----------------|---------|-----------|
-| **EC2 (CWAgent)** | 2 | mem_used_percent (>90%), disk_used_percent (>90%) | Tagged EC2 instances with CWAgent verified via list_metrics |
-| **Kafka (MSK)** | 5 | MaxOffsetLag (>200000), CpuUser (>90%), HeapMemoryAfterGC (>90%), KafkaDataLogsDiskUsed (>75%), ActiveControllerCount (<1) | Tagged MSK clusters |
-| **ACM** | 1 | DaysToExpiry (<=30 days) | Tagged certificates |
-| **ALB** | 1 | UnHealthyHostCount (>=1) | Tagged load balancers |
-| **Direct Connect** | 3 | ConnectionState (<1), IngressBandwidthPercent (>90%), EgressBandwidthPercent (>90%) | Tagged DX connections |
-| **EBS** | 3 | VolumeThroughputExceededCheck (>=1), VolumeIOPSExceededCheck (>=1), VolumeStalledIOCheck (>=1) | Volumes attached to tagged EC2s |
+| Service | Alarms/Resource | Metrics | WARNING | CRITICAL |
+|---------|-----------------|---------|---------|----------|
+| **EC2 (CWAgent)** | up to 4 | mem_used_percent, disk_used_percent | >85% | >95% |
+| **Kafka (MSK)** | up to 7 | MaxOffsetLag, CpuUser, HeapMemoryAfterGC, KafkaDataLogsDiskUsed, ActiveControllerCount | MaxOffsetLag >200,000; CPU/Heap >90%; Disk >75% | MaxOffsetLag >500,000; Disk >86%; Controller <1 |
+| **ACM** | 1 | DaysToExpiry | ≤30 days | — |
+| **ALB** | 1 | UnHealthyHostCount | ≥1 | — |
+| **NLB** | 1 | UnHealthyHostCount | ≥1 | — |
+| **Direct Connect** | up to 5 | ConnectionState, IngressBandwidthPercent, EgressBandwidthPercent | Bandwidth >80% | ConnectionState <1; Bandwidth >90% |
+| **EBS** | 3 | VolumeThroughputExceededCheck, VolumeIOPSExceededCheck, VolumeStalledIOCheck | ≥1 | — |
+| **EFS** | up to 2 | PercentIOLimit | >85% | >95% |
+| **NAT (resource)** | 2 | PacketsDropCount, ErrorPortAllocation | >100 | — |
 
 ---
 
@@ -157,7 +163,7 @@ python deploy_alarms.py --mode tag-based \
 
 ```bash
 python deploy_alarms.py --mode resource-based \
-  --service kafka --discover-all \
+  --service kafka \
   --tag-key Environment --tag-value Production \
   --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
@@ -167,7 +173,7 @@ python deploy_alarms.py --mode resource-based \
 
 ```bash
 python deploy_alarms.py --mode resource-based \
-  --service acm --discover-all \
+  --service acm \
   --tag-key Environment --tag-value Production \
   --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
@@ -178,7 +184,7 @@ python deploy_alarms.py --mode resource-based \
 ```bash
 # Bandwidth is auto-detected from the AWS Direct Connect API
 python deploy_alarms.py --mode resource-based \
-  --service directconnect --discover-all \
+  --service directconnect \
   --tag-key Environment --tag-value Production \
   --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
@@ -241,7 +247,8 @@ services:
   kafka:
     alarms:
       - metric: CpuUser
-        threshold: 90  # Change this
+        threshold_warning: 90   # Change WARNING threshold
+        # threshold_critical: 95  # Optionally add CRITICAL threshold
         operator: GreaterThanThreshold
 ```
 
@@ -249,7 +256,7 @@ Then redeploy:
 
 ```bash
 python deploy_alarms.py --mode resource-based --service kafka \
-  --tag-key Environment --tag-value Production --discover-all \
+  --tag-key Environment --tag-value Production \
   --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
   --region us-east-1
 ```
@@ -288,8 +295,7 @@ A: The CloudWatch Agent must be installed on EC2 instances to collect these metr
 
 | File | Description |
 |------|-------------|
-| `cloudformation-tag-based-alarms.yaml` | Tag-based CloudFormation template (10 alarms) |
-| `alarm-config-resource-based.yaml` | Resource-based alarm configuration (Kafka, ACM, ALB, Direct Connect) |
+| `cloudformation-tag-based-alarms.yaml` | Tag-based CloudFormation template (10 alarms) || `alarm-config-resource-based.yaml` | Resource-based alarm configuration (Kafka, ACM, ALB, Direct Connect) |
 | `deploy_alarms.py` | Main deployment script |
 | `resource_alarm_builder.py` | Template builder for resource-based alarms |
 | `METRICS_REFERENCE.md` | Detailed metrics reference with thresholds and descriptions |
