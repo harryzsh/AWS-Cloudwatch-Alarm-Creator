@@ -713,8 +713,7 @@ Examples:
                         help='Tag value to filter resources (REQUIRED)')
     parser.add_argument('--resources', nargs='+',
                         help='List of resource IDs for resource-based mode')
-    parser.add_argument('--discover-all', action='store_true',
-                        help='Auto-discover all resources for resource-based mode')
+
     parser.add_argument('--region', default='us-east-1',
                         help='AWS region (default: us-east-1)')
     parser.add_argument('--sns-topic', required=True,
@@ -732,8 +731,6 @@ Examples:
         if not args.service:
             parser.error("--service is required for resource-based mode")
         # Manual resource list is optional (for override)
-        if args.resources and args.discover_all:
-            parser.error("Cannot specify both --resources and --discover-all")
     
     print("🚀 CloudWatch Alarms Deployment")
     print(f"   Mode: {args.mode}")

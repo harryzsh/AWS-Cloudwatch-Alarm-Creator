@@ -3,14 +3,20 @@
 Simple CloudFormation template generator for resource-based alarms (no CDK required)
 
 Supports:
+- EC2 (CWAgent): mem_used_percent, disk_used_percent
 - Kafka (MSK): 5 alarms including math expression for memory percentage
 - ACM: 1 alarm for certificate expiry
+- ALB / NLB: UnHealthyHostCount
 - Direct Connect: 3 alarms including math expressions for bandwidth percentage
+- EBS: throughput / IOPS / stalled IO checks
+- EFS: PercentIOLimit
+- NAT: PacketsDropCount, ErrorPortAllocation
 
-Features:
-- Math expression support for computed metrics
-- Extra dimensions for multi-dimension alarms
-- Bandwidth parameter for Direct Connect percentage calculations
+Dual-severity support:
+- If an alarm config has threshold_warning + threshold_critical, TWO alarms are generated:
+    <name>-WARNING  (threshold_warning)
+    <name>-CRITICAL (threshold_critical)
+- If only threshold_warning (or legacy threshold) is present, ONE -WARNING alarm is generated.
 """
 import yaml
 import argparse
@@ -18,153 +24,37 @@ import hashlib
 
 
 class _NoAliasDumper(yaml.SafeDumper):
-    """YAML dumper that disables aliases — CloudFormation doesn't support them."""
+    """YAML dumper that disables aliases �?CloudFormation doesn't support them."""
     def ignore_aliases(self, data):
         return True
 
 
-def _stable_resource_name(service_name_clean, resource_id, metric_name):
-    """Generate a stable CloudFormation logical ID from resource_id + metric.
-    
-    Uses a short hash of the resource_id to avoid name collisions and ensure
-    adding/removing resources doesn't shift existing logical IDs.
-    """
-    # Hash the resource_id to get a short stable suffix (8 hex chars)
+def _stable_resource_name(service_name_clean, resource_id, metric_name, severity):
+    """Generate a stable CloudFormation logical ID from resource_id + metric + severity."""
     resource_hash = hashlib.md5(resource_id.encode()).hexdigest()[:8]
-    # Clean metric name for use in logical ID
     metric_clean = metric_name.replace('.', '').replace('_', '')
-    return f"{service_name_clean}{metric_clean}{resource_hash}"
+    return f"{service_name_clean}{metric_clean}{resource_hash}{severity.capitalize()}"
 
 
-def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, extra_dim_values=None):
-    """Generate alarm using Metrics Insights SQL query (for non-math-expression alarms)"""
+def _get_thresholds(alarm_config):
+    """Return list of (threshold, severity) tuples from alarm config.
     
-    metric_name = alarm_config['metric']
-    threshold = alarm_config['threshold']
-    operator = alarm_config['operator']
-    description = alarm_config['description']
-    
-    # Create stable CloudFormation resource name from resource_id + metric
-    service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
-    resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name)
-    
-    # Use tag-value based naming with resource name included
-    service_short = service_config['name'].split('(')[0].strip().replace(' ', '')  # "MSK" from "MSK (Kafka)"
-    
-    # Quote metric names with dots to avoid syntax errors
-    if '.' in metric_name:
-        metric_name_quoted = f'"{metric_name}"'
-    else:
-        metric_name_quoted = metric_name
-    
-    # Quote dimension names with spaces
-    dimension_name = service_config["dimension_name"]
-    if ' ' in dimension_name:
-        dimension_name_quoted = f'"{dimension_name}"'
-    else:
-        dimension_name_quoted = dimension_name
-    
-    # For EC2 CWAgent alarms, resource_id may be 'name|instance_id' — use instance_id for query
-    query_id = resource_id
-    display_id = resource_id
-    if '|' in resource_id:
-        display_id, query_id = resource_id.split('|', 1)
-    
-    expression = f'SELECT max({metric_name_quoted}) FROM "{service_config["namespace"]}" WHERE {dimension_name_quoted} = \'{query_id}\''
-    alarm_name = f"{tag_value}-{service_short}-{display_id}-{metric_name}_WARNING"
-    
-    alarm = {
-        'Type': 'AWS::CloudWatch::Alarm',
-        'Properties': {
-            'AlarmName': alarm_name,
-            'AlarmDescription': description,
-            'Metrics': [{
-                'Id': 'm1',
-                'ReturnData': True,
-                'Expression': expression,
-                'Period': 300
-            }],
-            'Threshold': threshold,
-            'ComparisonOperator': operator,
-            'EvaluationPeriods': 2,
-            'TreatMissingData': 'notBreaching',
-            'AlarmActions': [{'Ref': 'SNSTopicArn'}],
-            'OKActions': [{'Ref': 'SNSTopicArn'}]
-        }
-    }
-    
-    return resource_name, alarm
+    Supports:
+    - threshold_warning + threshold_critical -> two alarms
+    - threshold_warning only               -> one -WARNING alarm
+    - legacy threshold key                 -> one -WARNING alarm
+    """
+    warning = alarm_config.get('threshold_warning', alarm_config.get('threshold'))
+    critical = alarm_config.get('threshold_critical')
+
+    tiers = [(warning, 'WARNING')]
+    if critical is not None:
+        tiers.append((critical, 'CRITICAL'))
+    return tiers
 
 
-def generate_math_expression_alarm(service_config, resource_id, alarm_config, tag_value, bandwidth=None, extra_dim_values=None):
-    """Generate alarm using CloudFormation metric math expressions"""
-    
-    metric_name = alarm_config['metric']
-    threshold = alarm_config['threshold']
-    operator = alarm_config['operator']
-    description = alarm_config['description']
-    math_expression = alarm_config['math_expression']
-    math_metrics = alarm_config['math_metrics']
-    extra_dimensions = alarm_config.get('extra_dimensions', [])
-    
-    # Create stable CloudFormation resource name from resource_id + metric
-    service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
-    resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name)
-    
-    # Use tag-value based naming with resource name included
-    service_short = service_config['name'].split('(')[0].strip().replace(' ', '')
-    alarm_name = f"{tag_value}-{service_short}-{resource_id}-{metric_name}_WARNING"
-    
-    # Build dimensions list - primary dimension hardcoded with resource_id
-    dimensions = [
-        {
-            'Name': service_config['dimension_name'],
-            'Value': resource_id
-        }
-    ]
-    
-    # Add extra dimensions if present
-    # Note: extra dimensions like Broker ID, Consumer Group need actual values
-    # For now, these are placeholder — math expression alarms that need extra dims
-    # should be used with specific resource discovery that provides these values
-    for dim_name in extra_dimensions:
-        dimensions.append({
-            'Name': dim_name,
-            'Value': 'ALL'
-        })
-    
-    # Build metrics array with MetricStat entries for each math_metric
-    metrics = []
-    for metric_id, actual_metric_name in math_metrics.items():
-        metric_stat_entry = {
-            'Id': metric_id,
-            'ReturnData': False,
-            'MetricStat': {
-                'Metric': {
-                    'Namespace': service_config['namespace'],
-                    'MetricName': actual_metric_name,
-                    'Dimensions': dimensions
-                },
-                'Period': 300,
-                'Stat': 'Maximum'
-            }
-        }
-        metrics.append(metric_stat_entry)
-    
-    # Substitute bandwidth in expression if needed
-    expression = math_expression
-    if alarm_config.get('bandwidth_parameter') and bandwidth:
-        expression = expression.replace('bandwidth', str(bandwidth))
-    
-    # Add the expression entry
-    expression_entry = {
-        'Id': 'result',
-        'Expression': expression,
-        'ReturnData': True
-    }
-    metrics.append(expression_entry)
-    
-    alarm = {
+def _build_alarm_props(alarm_name, description, metrics, threshold, operator):
+    return {
         'Type': 'AWS::CloudWatch::Alarm',
         'Properties': {
             'AlarmName': alarm_name,
@@ -178,25 +68,102 @@ def generate_math_expression_alarm(service_config, resource_id, alarm_config, ta
             'OKActions': [{'Ref': 'SNSTopicArn'}]
         }
     }
-    
-    return resource_name, alarm
+
+
+def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, extra_dim_values=None):
+    """Generate alarms using Metrics Insights SQL query. Returns list of (resource_name, alarm)."""
+
+    metric_name = alarm_config['metric']
+    operator = alarm_config['operator']
+    description = alarm_config['description']
+
+    service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
+    service_short = service_config['name'].split('(')[0].strip().replace(' ', '')
+
+    metric_name_quoted = f'"{metric_name}"' if '.' in metric_name else metric_name
+    dimension_name = service_config["dimension_name"]
+    dimension_name_quoted = f'"{dimension_name}"' if ' ' in dimension_name else dimension_name
+
+    query_id = resource_id
+    display_id = resource_id
+    if '|' in resource_id:
+        display_id, query_id = resource_id.split('|', 1)
+
+    expression = (
+        f'SELECT max({metric_name_quoted}) FROM "{service_config["namespace"]}"'
+        f' WHERE {dimension_name_quoted} = \'{query_id}\''
+    )
+
+    results = []
+    for threshold, severity in _get_thresholds(alarm_config):
+        resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name, severity)
+        alarm_name = f"{tag_value}-{service_short}-{display_id}-{metric_name}-{severity}"
+        metrics = [{'Id': 'm1', 'ReturnData': True, 'Expression': expression, 'Period': 300}]
+        alarm = _build_alarm_props(alarm_name, description, metrics, threshold, operator)
+        results.append((resource_name, alarm))
+
+    return results
+
+
+def generate_math_expression_alarm(service_config, resource_id, alarm_config, tag_value, bandwidth=None, extra_dim_values=None):
+    """Generate alarms using CloudFormation metric math expressions. Returns list of (resource_name, alarm)."""
+
+    metric_name = alarm_config['metric']
+    operator = alarm_config['operator']
+    description = alarm_config['description']
+    math_expression = alarm_config['math_expression']
+    math_metrics = alarm_config['math_metrics']
+    extra_dimensions = alarm_config.get('extra_dimensions', [])
+
+    service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
+    service_short = service_config['name'].split('(')[0].strip().replace(' ', '')
+
+    dimensions = [{'Name': service_config['dimension_name'], 'Value': resource_id}]
+    for dim_name in extra_dimensions:
+        dimensions.append({'Name': dim_name, 'Value': 'ALL'})
+
+    # Build MetricStat entries
+    metric_stats = []
+    for metric_id, actual_metric_name in math_metrics.items():
+        metric_stats.append({
+            'Id': metric_id,
+            'ReturnData': False,
+            'MetricStat': {
+                'Metric': {
+                    'Namespace': service_config['namespace'],
+                    'MetricName': actual_metric_name,
+                    'Dimensions': dimensions
+                },
+                'Period': 300,
+                'Stat': 'Maximum'
+            }
+        })
+
+    expression = math_expression
+    if alarm_config.get('bandwidth_parameter') and bandwidth:
+        expression = expression.replace('bandwidth', str(bandwidth))
+
+    results = []
+    for threshold, severity in _get_thresholds(alarm_config):
+        resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name, severity)
+        alarm_name = f"{tag_value}-{service_short}-{resource_id}-{metric_name}-{severity}"
+        metrics = metric_stats + [{'Id': 'result', 'Expression': expression, 'ReturnData': True}]
+        alarm = _build_alarm_props(alarm_name, description, metrics, threshold, operator)
+        results.append((resource_name, alarm))
+
+    return results
 
 
 def generate_alarm(service_config, resource_id, alarm_config, tag_value, bandwidth=None, extra_dim_values=None):
-    """Generate alarm - dispatches to appropriate generator based on alarm type"""
-    
+    """Dispatch to appropriate generator. Returns list of (resource_name, alarm)."""
     if 'math_expression' in alarm_config:
         return generate_math_expression_alarm(
             service_config, resource_id, alarm_config, tag_value, bandwidth, extra_dim_values
         )
-    else:
-        return generate_simple_alarm(
-            service_config, resource_id, alarm_config, tag_value, extra_dim_values
-        )
+    return generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, extra_dim_values)
 
 
 def get_required_parameters(service_config):
-    """Get all required CloudFormation parameters for a service"""
     return {
         'SNSTopicArn': {
             'Type': 'String',
@@ -208,63 +175,54 @@ def get_required_parameters(service_config):
 
 
 def build_template(service: str, resource_ids: list, tag_value: str, bandwidth: int = None) -> dict:
-    """Build a CloudFormation template dict for resource-based alarms.
-    
-    This is the main API for programmatic use (e.g., from deploy_alarms.py).
-    Returns the template as a dict ready for yaml.dump() or direct CloudFormation use.
-    """
+    """Build a CloudFormation template dict for resource-based alarms."""
     with open('alarm-config-resource-based.yaml', 'r', encoding='utf-8', errors='ignore') as f:
         config = yaml.safe_load(f)
-    
+
     service_config = config['services'][service]
-    
-    # Validate bandwidth for services that need it
+
     needs_bandwidth = any(a.get('bandwidth_parameter') for a in service_config['alarms'])
     if needs_bandwidth and not bandwidth:
-        raise ValueError(
-            f'bandwidth is required for {service} (has bandwidth-based math expressions)')
-    
+        raise ValueError(f'bandwidth is required for {service} (has bandwidth-based math expressions)')
+
     parameters = get_required_parameters(service_config)
-    
+
     template = {
         'AWSTemplateFormatVersion': '2010-09-09',
         'Description': f'{service_config["name"]} CloudWatch Alarms',
         'Parameters': parameters,
         'Resources': {}
     }
-    
-    alarm_index = 0
+
     for resource_id in resource_ids:
         for alarm_config in service_config['alarms']:
-            resource_name, alarm = generate_alarm(
-                service_config, resource_id, alarm_config,
-                tag_value, bandwidth
-            )
-            template['Resources'][resource_name] = alarm
-            alarm_index += 1
-    
+            for resource_name, alarm in generate_alarm(
+                service_config, resource_id, alarm_config, tag_value, bandwidth
+            ):
+                template['Resources'][resource_name] = alarm
+
     return template
 
 
 def main():
+    valid_services = ['ec2', 'kafka', 'acm', 'alb', 'nlb', 'directconnect', 'ebs', 'efs', 'nat']
     parser = argparse.ArgumentParser(description='Generate resource-based alarm template')
-    parser.add_argument('--service', required=True, choices=['ec2', 'kafka', 'acm', 'alb', 'directconnect', 'ebs'],
-                        help='Service type: ec2, kafka, acm, alb, directconnect, or ebs')
+    parser.add_argument('--service', required=True, choices=valid_services,
+                        help=f'Service type: {", ".join(valid_services)}')
     parser.add_argument('--tag-value', required=True, help='Tag value for alarm naming')
     parser.add_argument('--resources', nargs='+', required=True, help='Resource IDs')
-    parser.add_argument('--bandwidth', type=int, help='Connection bandwidth in bps (auto-detected for directconnect, optional manual override)')
+    parser.add_argument('--bandwidth', type=int, help='Connection bandwidth in bps (required for directconnect)')
     args = parser.parse_args()
-    
+
     try:
         template = build_template(args.service, args.resources, args.tag_value, args.bandwidth)
     except ValueError as e:
         parser.error(str(e))
-    
-    # Write template to file (CLI mode only)
+
     output_file = f'cloudformation-{args.service}-alarms-generated.yaml'
     with open(output_file, 'w', encoding='utf-8') as f:
         yaml.dump(template, f, default_flow_style=False, allow_unicode=True, sort_keys=False, Dumper=_NoAliasDumper)
-    
+
     alarm_count = len(template['Resources'])
     print(f"Generated {output_file}")
     print(f"   Resources: {len(args.resources)}")

@@ -1,7 +1,8 @@
 # Resource-Based Alarm Configuration
-# Services: Kafka (MSK), ACM, ALB, Direct Connect
-# All broker-level Kafka metrics use Metrics Insights SQL to aggregate across brokers
-# One alarm per metric - _WARNING severity tier
+# Services: EC2, Kafka (MSK), ACM, ALB, Direct Connect, EBS, EFS
+# Each alarm supports optional warning/critical thresholds.
+# If threshold_critical is present, two alarms are generated: -WARNING and -CRITICAL
+# If only threshold (or threshold_warning) is present, one -WARNING alarm is generated.
 
 services:
   ec2:
@@ -10,14 +11,17 @@ services:
     dimension_name: InstanceId
     alarms:
       - metric: mem_used_percent
-        threshold: 90
+        threshold_warning: 85
+        threshold_critical: 95
         operator: GreaterThanThreshold
-        description: EC2实例内存使用率超过90% (需要CloudWatch Agent)
+        description: EC2实例内存使用率超过阈值 (需要CloudWatch Agent)
 
       - metric: disk_used_percent
-        threshold: 90
+        threshold_warning: 85
+        threshold_critical: 95
         operator: GreaterThanThreshold
-        description: EC2实例磁盘使用率超过90% (需要CloudWatch Agent)
+        description: EC2实例磁盘使用率超过阈值 (需要CloudWatch Agent)
+
 
   kafka:
     name: MSK (Kafka)
@@ -25,27 +29,29 @@ services:
     dimension_name: Cluster Name
     alarms:
       - metric: MaxOffsetLag
-        threshold: 200000
+        threshold_warning: 200000
+        threshold_critical: 500000
         operator: GreaterThanThreshold
         description: Kafka消费者组最大偏移延迟 - 消费者落后生产者
 
       - metric: CpuUser
-        threshold: 90
+        threshold_warning: 90
         operator: GreaterThanThreshold
         description: Kafka Broker CPU用户空间使用率
 
       - metric: HeapMemoryAfterGC
-        threshold: 90
+        threshold_warning: 90
         operator: GreaterThanThreshold
         description: Kafka Broker GC后堆内存使用百分比
 
       - metric: KafkaDataLogsDiskUsed
-        threshold: 75
+        threshold_warning: 75
+        threshold_critical: 86
         operator: GreaterThanThreshold
         description: Kafka数据日志磁盘使用率
 
       - metric: ActiveControllerCount
-        threshold: 1
+        threshold_critical: 1
         operator: LessThanThreshold
         description: Kafka活跃控制器数量 - 应始终为1
 
@@ -55,7 +61,7 @@ services:
     dimension_name: CertificateArn
     alarms:
       - metric: DaysToExpiry
-        threshold: 30
+        threshold_warning: 30
         operator: LessThanOrEqualToThreshold
         description: ACM证书到期天数 - 证书即将过期
 
@@ -65,9 +71,19 @@ services:
     dimension_name: LoadBalancer
     alarms:
       - metric: UnHealthyHostCount
-        threshold: 1
+        threshold_warning: 1
         operator: GreaterThanOrEqualToThreshold
         description: ALB后端不健康主机数量大于等于1
+
+  nlb:
+    name: NLB
+    namespace: AWS/NetworkELB
+    dimension_name: LoadBalancer
+    alarms:
+      - metric: UnHealthyHostCount
+        threshold_warning: 1
+        operator: GreaterThanOrEqualToThreshold
+        description: NLB后端不健康主机数量大于等于1
 
   directconnect:
     name: Direct Connect
@@ -75,7 +91,7 @@ services:
     dimension_name: ConnectionId
     alarms:
       - metric: ConnectionState
-        threshold: 1
+        threshold_critical: 1
         operator: LessThanThreshold
         description: Direct Connect连接状态 - 连接断开
 
@@ -83,7 +99,8 @@ services:
         math_expression: "m1/bandwidth*100"
         math_metrics:
           m1: ConnectionBpsIngress
-        threshold: 90
+        threshold_warning: 80
+        threshold_critical: 90
         operator: GreaterThanThreshold
         description: Direct Connect入站带宽使用百分比
         bandwidth_parameter: true
@@ -92,7 +109,8 @@ services:
         math_expression: "m1/bandwidth*100"
         math_metrics:
           m1: ConnectionBpsEgress
-        threshold: 90
+        threshold_warning: 80
+        threshold_critical: 90
         operator: GreaterThanThreshold
         description: Direct Connect出站带宽使用百分比
         bandwidth_parameter: true
@@ -103,16 +121,42 @@ services:
     dimension_name: VolumeId
     alarms:
       - metric: VolumeThroughputExceededCheck
-        threshold: 1
+        threshold_warning: 1
         operator: GreaterThanOrEqualToThreshold
         description: EBS卷吞吐量超过预置限制
 
       - metric: VolumeIOPSExceededCheck
-        threshold: 1
+        threshold_warning: 1
         operator: GreaterThanOrEqualToThreshold
         description: EBS卷IOPS超过预置限制
 
       - metric: VolumeStalledIOCheck
-        threshold: 1
+        threshold_warning: 1
         operator: GreaterThanOrEqualToThreshold
         description: EBS卷IO停滞检测
+
+  efs:
+    name: EFS
+    namespace: AWS/EFS
+    dimension_name: FileSystemId
+    alarms:
+      - metric: PercentIOLimit
+        threshold_warning: 85
+        threshold_critical: 95
+        operator: GreaterThanThreshold
+        description: EFS文件系统IO使用率超过阈值
+
+  nat:
+    name: NAT
+    namespace: AWS/NATGateway
+    dimension_name: NatGatewayId
+    alarms:
+      - metric: PacketsDropCount
+        threshold_warning: 100
+        operator: GreaterThanThreshold
+        description: NAT网关连接失败丢包数量超过100
+
+      - metric: ErrorPortAllocation
+        threshold_warning: 100
+        operator: GreaterThanThreshold
+        description: NAT网关端口分配失败次数超过100

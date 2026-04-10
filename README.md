@@ -44,7 +44,7 @@ Note: EC2 CWAgent alarms are auto-deployed with both `--mode tag-based` and `--m
 ### Key Features
 
 - ✅ **CloudWatch Metrics Insights SQL** - Tag-based filtering for scalable monitoring
-- ✅ **_WARNING severity tier** - Ready for future `_CRITICAL` additions
+- ✅ **WARNING/CRITICAL severity tiers** - Dual severity support with `-WARNING` and `-CRITICAL` suffixes
 - ✅ **OKActions** - Notified on both alarm trigger and recovery
 - ✅ **Math Expressions** - Computed metrics for Direct Connect bandwidth
 - ✅ **CWAgent Integration** - Per-instance EC2 memory, disk, and inode monitoring
@@ -215,18 +215,18 @@ Creates dedicated alarms for each resource with support for:
 
 ### Alarm Naming Convention
 
-All alarms use the `_WARNING` suffix to support future severity tiers:
+All alarms use `-WARNING` or `-CRITICAL` suffix:
 
 ```
-{TagValue}-{Service}-{Resource}-{Metric}_WARNING
+{TagValue}-{Service}-{Resource}-{Metric}-WARNING
+{TagValue}-{Service}-{Resource}-{Metric}-CRITICAL
 ```
 
 Examples:
-- `Production-EC2-CPUUtilization_WARNING`
-- `Production-MSK-mycluster-CpuUser_WARNING`
-- `Production-DirectConnect-dxcon-abc123-ConnectionState_WARNING`
-
-When adding critical-tier alarms later, use `_CRITICAL` with higher thresholds.
+- `Production-EC2-CPUUtilization-WARNING`
+- `Production-EC2-CPUUtilization-CRITICAL`
+- `Production-MSK-mycluster-CpuUser-WARNING`
+- `Production-DirectConnect-dxcon-abc123-ConnectionState-CRITICAL`
 
 ---
 

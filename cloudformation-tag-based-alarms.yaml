@@ -1,36 +1,36 @@
 ﻿AWSTemplateFormatVersion: '2010-09-09'
-Description: Tag-Based CloudWatch Alarms for EC2, NAT Gateway, and VPN (9 alarms)
+Description: 基于标签的CloudWatch告警 - EC2、NAT网关和VPN（WARNING + CRITICAL双级别）
 
 Parameters:
   TagKey:
     Type: String
-    Description: Tag key to filter resources (e.g., Environment, Team, Application)
+    Description: 用于筛选资源的标签键（例如：Environment、Team、Application）
     AllowedPattern: .+
-    ConstraintDescription: TagKey is required and cannot be empty
+    ConstraintDescription: TagKey为必填项，不能为空
 
   TagValue:
     Type: String
-    Description: Tag value to filter resources (e.g., Production, Staging, UAT)
+    Description: 用于筛选资源的标签值（例如：Production、Staging、UAT）
     AllowedPattern: .+
-    ConstraintDescription: TagValue is required and cannot be empty
+    ConstraintDescription: TagValue为必填项，不能为空
 
   SNSTopicArn:
     Type: String
-    Description: SNS Topic ARN for alarm notifications (REQUIRED - alarms will not notify without this)
+    Description: 告警通知的SNS主题ARN（必填 - 未填写则告警不会发送通知）
     AllowedPattern: arn:aws:sns:[a-z0-9-]+:[0-9]{12}:.+
-    ConstraintDescription: Must be a valid SNS Topic ARN (e.g., arn:aws:sns:ap-southeast-2:123456789012:my-topic)
+    ConstraintDescription: 必须是有效的SNS主题ARN（例如：arn:aws:sns:ap-southeast-2:123456789012:my-topic）
 
 Resources:
   # =============================================================================
-  # EC2 Alarms (4 alarms)
+  # EC2 Alarms
   # =============================================================================
 
-  # EC2 Alarm 1: CPUUtilization
+  # EC2: CPUUtilization WARNING (>90%)
   EC2CPUUtilizationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${TagValue}-EC2-CPUUtilization_WARNING"
-      AlarmDescription: EC2 CPU utilization exceeded 90%
+      AlarmName: !Sub "${TagValue}-EC2-CPUUtilization-WARNING"
+      AlarmDescription: EC2实例CPU使用率超过90%
       Metrics:
         - Id: m1
           ReturnData: true
@@ -48,12 +48,35 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # EC2 Alarm 2: StatusCheckFailed_System
+  # EC2: CPUUtilization CRITICAL (>98%)
+  EC2CPUUtilizationCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-EC2-CPUUtilization-CRITICAL"
+      AlarmDescription: EC2实例CPU使用率超过98%
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(CPUUtilization) FROM "AWS/EC2"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY tag.Name ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 98
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
+  # EC2: StatusCheckFailed_System CRITICAL
   EC2StatusCheckFailedSystemAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedSystem_WARNING"
-      AlarmDescription: EC2 system status check failed - AWS infrastructure issue
+      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedSystem-CRITICAL"
+      AlarmDescription: EC2系统状态检查失败 - AWS基础设施问题
       Metrics:
         - Id: m1
           ReturnData: true
@@ -71,35 +94,12 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # EC2 Alarm 3: StatusCheckFailed
-  EC2StatusCheckFailedAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailed_WARNING"
-      AlarmDescription: EC2 status check failed - system or instance issue
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(StatusCheckFailed) FROM "AWS/EC2"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY tag.Name ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # EC2 Alarm 4: StatusCheckFailed_Instance
+  # EC2: StatusCheckFailed_Instance CRITICAL
   EC2StatusCheckFailedInstanceAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedInstance_WARNING"
-      AlarmDescription: EC2 instance status check failed - instance configuration issue
+      AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedInstance-CRITICAL"
+      AlarmDescription: EC2实例状态检查失败 - 实例配置问题
       Metrics:
         - Id: m1
           ReturnData: true
@@ -117,93 +117,12 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # =============================================================================
-  # NAT Gateway Alarms (1 alarm)
-  # =============================================================================
-
-  # NAT Gateway Alarm 1: ErrorPortAllocation
-  NATGatewayErrorPortAllocationAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-NATGateway-ErrorPortAllocation_WARNING"
-      AlarmDescription: NAT Gateway port allocation errors exceeded 100
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(ErrorPortAllocation) FROM "AWS/NATGateway"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY NatGatewayId ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 100
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # =============================================================================
-  # VPN Alarms (2 alarms)
-  # =============================================================================
-
-  # VPN Alarm 1: TunnelState (connection-level)
-  VPNTunnelStateConnectionAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-VPN-TunnelState-Connection_WARNING"
-      AlarmDescription: VPN connection tunnel state abnormal - connection level monitoring
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(TunnelState) FROM "AWS/VPN"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY VpnId ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 1
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # VPN Alarm 2: TunnelState (tunnel-level)
-  VPNTunnelStateTunnelAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${TagValue}-VPN-TunnelState-Tunnel_WARNING"
-      AlarmDescription: VPN tunnel state abnormal - tunnel level monitoring
-      Metrics:
-        - Id: m1
-          ReturnData: true
-          Expression: !Sub >-
-            SELECT MAX(TunnelState) FROM "AWS/VPN"
-            WHERE tag.${TagKey} = '${TagValue}'
-            GROUP BY VpnId, TunnelIpAddress ORDER BY MAX() DESC
-          Period: 300
-      Threshold: 1
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 2
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSTopicArn
-      OKActions:
-        - !Ref SNSTopicArn
-
-  # =============================================================================
-  # EC2 EBS Alarms (2 alarms)
-  # =============================================================================
-
-  # EC2 EBS Alarm 1: InstanceEBSThroughputExceededCheck
+  # EC2 EBS: InstanceEBSThroughputExceededCheck WARNING
   EC2EBSThroughputExceededAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${TagValue}-EC2-InstanceEBSThroughputExceededCheck_WARNING"
-      AlarmDescription: EC2 instance EBS throughput exceeded instance maximum limit (Nitro instances only)
+      AlarmName: !Sub "${TagValue}-EC2-InstanceEBSThroughputExceededCheck-WARNING"
+      AlarmDescription: EC2实例EBS吞吐量超过实例最大限制（仅限Nitro实例）
       Metrics:
         - Id: m1
           ReturnData: true
@@ -221,12 +140,12 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
-  # EC2 EBS Alarm 2: InstanceEBSIOPSExceededCheck
+  # EC2 EBS: InstanceEBSIOPSExceededCheck WARNING
   EC2EBSIOPSExceededAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${TagValue}-EC2-InstanceEBSIOPSExceededCheck_WARNING"
-      AlarmDescription: EC2 instance EBS IOPS exceeded instance maximum limit (Nitro instances only)
+      AlarmName: !Sub "${TagValue}-EC2-InstanceEBSIOPSExceededCheck-WARNING"
+      AlarmDescription: EC2实例EBS IOPS超过实例最大限制（仅限Nitro实例）
       Metrics:
         - Id: m1
           ReturnData: true
@@ -244,23 +163,123 @@ Resources:
       OKActions:
         - !Ref SNSTopicArn
 
+  # =============================================================================
+  # NAT Gateway Alarms
+  # =============================================================================
+
+  # NAT: ErrorPortAllocation WARNING (>100)
+  NATGatewayErrorPortAllocationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-NATGateway-ErrorPortAllocation-WARNING"
+      AlarmDescription: NAT网关端口分配错误次数超过100
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(ErrorPortAllocation) FROM "AWS/NATGateway"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY NatGatewayId ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
+  # NAT: PacketsDropCount WARNING (>100)
+  NATGatewayPacketsDropCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-NATGateway-PacketsDropCount-WARNING"
+      AlarmDescription: NAT网关连接失败丢包数量超过100
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(PacketsDropCount) FROM "AWS/NATGateway"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY NatGatewayId ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
+  # =============================================================================
+  # VPN Alarms
+  # =============================================================================
+
+  # VPN: TunnelState connection-level CRITICAL
+  VPNTunnelStateConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-VPN-TunnelState-Connection-CRITICAL"
+      AlarmDescription: VPN连接隧道状态异常 - 连接级别监控
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(TunnelState) FROM "AWS/VPN"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY VpnId ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
+  # VPN: TunnelState tunnel-level CRITICAL
+  VPNTunnelStateTunnelAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${TagValue}-VPN-TunnelState-Tunnel-CRITICAL"
+      AlarmDescription: VPN隧道状态异常 - 隧道级别监控
+      Metrics:
+        - Id: m1
+          ReturnData: true
+          Expression: !Sub >-
+            SELECT MAX(TunnelState) FROM "AWS/VPN"
+            WHERE tag.${TagKey} = '${TagValue}'
+            GROUP BY VpnId, TunnelIpAddress ORDER BY MAX() DESC
+          Period: 300
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 2
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicArn
+      OKActions:
+        - !Ref SNSTopicArn
+
 Outputs:
   AlarmCount:
-    Description: Total number of alarms in this template
-    Value: "9"
+    Description: 此模板中的告警总数
+    Value: "10"
 
   EC2AlarmCount:
-    Description: Number of EC2 alarms (CPU, status checks x3, EBS throughput, EBS IOPS)
+    Description: EC2告警数量（CPU WARNING/CRITICAL、状态检查×2 CRITICAL、EBS×2 WARNING）
     Value: "6"
 
   NATGatewayAlarmCount:
-    Description: Number of NAT Gateway alarms
-    Value: "1"
+    Description: NAT网关告警数量（ErrorPortAllocation + PacketsDropCount）
+    Value: "2"
 
   VPNAlarmCount:
-    Description: Number of VPN alarms
+    Description: VPN告警数量（连接级别 + 隧道级别 CRITICAL）
     Value: "2"
 
   TagBasedServices:
-    Description: Services monitored by this tag-based template
+    Description: 此基于标签模板监控的服务
     Value: "EC2, NAT Gateway, VPN"
