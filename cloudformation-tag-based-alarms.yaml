@@ -1,5 +1,5 @@
 ﻿AWSTemplateFormatVersion: '2010-09-09'
-Description: Tag-Based CloudWatch Alarms for EC2, NAT Gateway, and VPN (10 alarms)
+Description: Tag-Based CloudWatch Alarms for EC2, NAT Gateway, and VPN (9 alarms)
 
 Parameters:
   TagKey:
@@ -22,7 +22,7 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # EC2 Alarms (7 alarms)
+  # EC2 Alarms (4 alarms)
   # =============================================================================
 
   # EC2 Alarm 1: CPUUtilization
@@ -30,7 +30,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-CPUUtilization_WARNING"
-      AlarmDescription: 鏈嶅姟鍣–PU浣跨敤鐜囪秴杩?0%
+      AlarmDescription: EC2 CPU utilization exceeded 90%
       Metrics:
         - Id: m1
           ReturnData: true
@@ -53,7 +53,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedSystem_WARNING"
-      AlarmDescription: EC2绯荤粺鐘舵€佹鏌ュけ璐?- AWS鍩虹璁炬柦闂
+      AlarmDescription: EC2 system status check failed - AWS infrastructure issue
       Metrics:
         - Id: m1
           ReturnData: true
@@ -76,7 +76,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailed_WARNING"
-      AlarmDescription: EC2鐘舵€佹鏌ュけ璐?- 绯荤粺鎴栧疄渚嬮棶棰?
+      AlarmDescription: EC2 status check failed - system or instance issue
       Metrics:
         - Id: m1
           ReturnData: true
@@ -99,7 +99,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-StatusCheckFailedInstance_WARNING"
-      AlarmDescription: EC2瀹炰緥鐘舵€佹鏌ュけ璐?- 瀹炰緥閰嶇疆闂
+      AlarmDescription: EC2 instance status check failed - instance configuration issue
       Metrics:
         - Id: m1
           ReturnData: true
@@ -126,7 +126,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-NATGateway-ErrorPortAllocation_WARNING"
-      AlarmDescription: NAT缃戝叧绔彛鍒嗛厤閿欒瓒呰繃100娆?
+      AlarmDescription: NAT Gateway port allocation errors exceeded 100
       Metrics:
         - Id: m1
           ReturnData: true
@@ -153,7 +153,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-VPN-TunnelState-Connection_WARNING"
-      AlarmDescription: VPN杩炴帴闅ч亾鐘舵€佸紓甯?- 杩炴帴绾у埆鐩戞帶
+      AlarmDescription: VPN connection tunnel state abnormal - connection level monitoring
       Metrics:
         - Id: m1
           ReturnData: true
@@ -176,7 +176,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-VPN-TunnelState-Tunnel_WARNING"
-      AlarmDescription: VPN闅ч亾鐘舵€佸紓甯?- 闅ч亾绾у埆鐩戞帶
+      AlarmDescription: VPN tunnel state abnormal - tunnel level monitoring
       Metrics:
         - Id: m1
           ReturnData: true
@@ -203,7 +203,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-InstanceEBSThroughputExceededCheck_WARNING"
-      AlarmDescription: EC2瀹炰緥EBS鍚炲悙閲忚秴杩囧疄渚嬫渶澶ч檺鍒?(浠呴€傜敤浜嶯itro瀹炰緥)
+      AlarmDescription: EC2 instance EBS throughput exceeded instance maximum limit (Nitro instances only)
       Metrics:
         - Id: m1
           ReturnData: true
@@ -226,7 +226,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${TagValue}-EC2-InstanceEBSIOPSExceededCheck_WARNING"
-      AlarmDescription: EC2瀹炰緥EBS IOPS瓒呰繃瀹炰緥鏈€澶ч檺鍒?(浠呴€傜敤浜嶯itro瀹炰緥)
+      AlarmDescription: EC2 instance EBS IOPS exceeded instance maximum limit (Nitro instances only)
       Metrics:
         - Id: m1
           ReturnData: true
@@ -247,19 +247,15 @@ Resources:
 Outputs:
   AlarmCount:
     Description: Total number of alarms in this template
-    Value: "12"
+    Value: "9"
 
   EC2AlarmCount:
-    Description: Number of EC2 alarms
-    Value: "9"
+    Description: Number of EC2 alarms (CPU, status checks x3, EBS throughput, EBS IOPS)
+    Value: "6"
 
   NATGatewayAlarmCount:
     Description: Number of NAT Gateway alarms
     Value: "1"
-
-  ALBAlarmCount:
-    Description: Number of ALB alarms (moved to resource-based)
-    Value: "0"
 
   VPNAlarmCount:
     Description: Number of VPN alarms
@@ -268,4 +264,3 @@ Outputs:
   TagBasedServices:
     Description: Services monitored by this tag-based template
     Value: "EC2, NAT Gateway, VPN"
-
