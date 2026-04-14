@@ -2,24 +2,23 @@
 """
 Bedrock CloudWatch Alarm Builder
 
-Auto-discovers active Bedrock ModelIds from CloudWatch, merges with
-alarm-config-bedrock.yaml overrides, and generates a CloudFormation template.
-
-Logic:
-- Auto-discover all ModelIds that have CloudWatch data in AWS/Bedrock namespace
-- Load per-model overrides from alarm-config-bedrock.yaml
-- For models in overrides: use override alarms (drop from auto-discovered list)
-- For remaining auto-discovered models: use default alarms
-- Result: no duplicates, overrides always win
+Reads alarm-config-bedrock.yaml and generates a CloudFormation template.
+Only models explicitly listed under 'models' will have alarms created.
+No auto-discovery — full customer control.
 """
 import yaml
 import hashlib
-import boto3
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
 
 CONFIG_FILE = 'alarm-config-bedrock.yaml'
 NAMESPACE = 'AWS/Bedrock'
+
+# Metrics that use Sum statistic (count-based)
+SUM_METRICS = {
+    'Invocations', 'InvocationClientErrors', 'InvocationServerErrors',
+    'InputTokenCount', 'OutputTokenCount', 'EstimatedTPMQuotaUsage'
+}
 
 
 class _NoAliasDumper(yaml.SafeDumper):
@@ -31,7 +30,6 @@ def _model_logical_id(model_id: str, metric: str, severity: str) -> str:
     """Stable CloudFormation logical ID from model_id + metric + severity."""
     h = hashlib.md5(model_id.encode()).hexdigest()[:8]
     metric_clean = metric.replace('.', '').replace('_', '')
-    # Shorten model_id to last segment for readability: anthropic.claude-... → Claude
     short = model_id.split('.')[-1].split('-')[0].capitalize()
     return f"Bedrock{short}{metric_clean}{h}{severity.capitalize()}"
 
@@ -48,32 +46,14 @@ def _get_thresholds(alarm_config: dict) -> List[Tuple]:
     return tiers
 
 
-def discover_active_models(region: str) -> List[str]:
-    """Discover ModelIds that have active CloudWatch metrics in AWS/Bedrock."""
-    print(f"🔍 Auto-discovering active Bedrock models in {region}...")
-    cw = boto3.client('cloudwatch', region_name=region)
-    paginator = cw.get_paginator('list_metrics')
-
-    model_ids = set()
-    for page in paginator.paginate(Namespace=NAMESPACE, Dimensions=[{'Name': 'ModelId'}]):
-        for metric in page['Metrics']:
-            for dim in metric.get('Dimensions', []):
-                if dim['Name'] == 'ModelId':
-                    model_ids.add(dim['Value'])
-
-    models = sorted(model_ids)
-    print(f"   Found {len(models)} active model(s): {', '.join(models) if models else 'none'}")
-    return models
-
-
 def load_config() -> dict:
     """Load alarm-config-bedrock.yaml."""
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"⚠ {CONFIG_FILE} not found, using built-in defaults only")
-        return {'defaults': [], 'overrides': []}
+        print(f"⚠ {CONFIG_FILE} not found — no Bedrock alarms will be deployed")
+        return {'models': []}
 
 
 def build_alarm(model_id: str, alarm_cfg: dict, tag_value: str) -> List[Tuple[str, dict]]:
@@ -83,6 +63,7 @@ def build_alarm(model_id: str, alarm_cfg: dict, tag_value: str) -> List[Tuple[st
     description = alarm_cfg.get('description', f'Bedrock {metric} alarm')
     period = alarm_cfg.get('period', 300)
     eval_periods = alarm_cfg.get('evaluation_periods', 2)
+    statistic = 'Sum' if metric in SUM_METRICS else 'Average'
 
     results = []
     for threshold, severity in _get_thresholds(alarm_cfg):
@@ -97,9 +78,8 @@ def build_alarm(model_id: str, alarm_cfg: dict, tag_value: str) -> List[Tuple[st
                 'Namespace': NAMESPACE,
                 'MetricName': metric,
                 'Dimensions': [{'Name': 'ModelId', 'Value': model_id}],
-                'Statistic': 'Sum' if metric in ('Invocations', 'InvocationClientErrors', 'InvocationServerErrors',
-                                                  'InputTokenCount', 'OutputTokenCount',
-                                                  'EstimatedTPMQuotaUsage') else 'Average',                'Period': period,
+                'Statistic': statistic,
+                'Period': period,
                 'EvaluationPeriods': eval_periods,
                 'Threshold': threshold,
                 'ComparisonOperator': operator,
@@ -113,50 +93,27 @@ def build_alarm(model_id: str, alarm_cfg: dict, tag_value: str) -> List[Tuple[st
 
 
 def build_template(tag_value: str, region: str) -> dict:
-    """
-    Build CloudFormation template for Bedrock alarms.
-
-    Merge logic:
-    1. Auto-discover active ModelIds
-    2. Load overrides from config
-    3. Override models replace auto-discovered ones (no duplicates)
-    4. Remaining auto-discovered models get default alarms
-    """
+    """Build CloudFormation template from alarm-config-bedrock.yaml."""
     config = load_config()
-    defaults = config.get('defaults', [])
-    overrides = config.get('overrides') or []
+    models = config.get('models') or []
 
-    # Build set of model_ids that have explicit overrides
-    override_model_ids = {o['model_id'] for o in overrides}
+    if not models:
+        print("   No models configured in alarm-config-bedrock.yaml — skipping")
+        return {'Resources': {}}
 
-    # Auto-discover, then remove any that have overrides (override wins)
-    discovered = discover_active_models(region)
-    auto_models = [m for m in discovered if m not in override_model_ids]
-
-    if override_model_ids:
-        print(f"   Override models (yaml): {', '.join(sorted(override_model_ids))}")
-    if auto_models:
-        print(f"   Auto-discovered models (defaults): {', '.join(auto_models)}")
+    print(f"   Configured models: {', '.join(m['model_id'] for m in models)}")
 
     resources = {}
-
-    # Auto-discovered models → use defaults
-    for model_id in auto_models:
-        for alarm_cfg in defaults:
-            for logical_id, alarm in build_alarm(model_id, alarm_cfg, tag_value):
-                resources[logical_id] = alarm
-
-    # Override models → use their specific alarms
-    for override in overrides:
-        model_id = override['model_id']
-        for alarm_cfg in override.get('alarms', []):
+    for model_entry in models:
+        model_id = model_entry['model_id']
+        for alarm_cfg in model_entry.get('alarms', []):
             for logical_id, alarm in build_alarm(model_id, alarm_cfg, tag_value):
                 resources[logical_id] = alarm
 
     alarm_count = len(resources)
     print(f"   Total alarms to deploy: {alarm_count}")
 
-    template = {
+    return {
         'AWSTemplateFormatVersion': '2010-09-09',
         'Description': f'Bedrock CloudWatch Alarms - {tag_value}',
         'Parameters': {
@@ -175,12 +132,10 @@ def build_template(tag_value: str, region: str) -> dict:
             },
             'MonitoredModels': {
                 'Description': '监控的模型数量',
-                'Value': str(len(auto_models) + len(override_model_ids))
+                'Value': str(len(models))
             }
         }
     }
-
-    return template
 
 
 def dump_template(template: dict) -> str:

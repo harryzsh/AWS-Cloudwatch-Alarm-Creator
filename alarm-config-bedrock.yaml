@@ -1,127 +1,113 @@
 # Bedrock Alarm Configuration
 # =============================================================================
 # HOW IT WORKS:
-#   1. Auto-discovery finds all ModelIds with active CloudWatch data in your account
-#   2. Default thresholds below are applied to every discovered model
-#   3. If a model_id appears in the 'overrides' section, those thresholds are used
-#      instead of the defaults (auto-discovered duplicates are removed)
-#   4. Models listed under 'overrides' but NOT discovered are still deployed
-#      (useful for pre-configuring models before they receive traffic)
+#   Only models explicitly listed under 'models' will have alarms created.
+#   No auto-discovery — you have full control over which models are monitored.
+#
+# HOW TO ADD A MODEL:
+#   1. Find your model's TPM quota:
+#      aws service-quotas list-service-quotas --service-code bedrock \
+#        --region us-east-1 \
+#        --query "Quotas[?contains(QuotaName,'<model name>')].{Name:QuotaName,Value:Value}"
+#
+#   2. Calculate EstimatedTPMQuotaUsage thresholds:
+#      threshold_warning  = TPM_quota × 80%
+#      threshold_critical = TPM_quota × 90%
+#      Example: Claude Sonnet 4.6 TPM quota = 6,000,000
+#        threshold_warning:  4800000   (6,000,000 × 80%)
+#        threshold_critical: 5400000   (6,000,000 × 90%)
+#
+# METRIC NOTES:
+#   EstimatedTPMQuotaUsage — raw token count (Sum over 60s = tokens per minute)
+#   InvocationClientErrors — includes throttling 429 errors (Sum over period)
+#   Invocations            — total call count (Sum over period)
+#   TimeToFirstToken       — streaming APIs only, in milliseconds (Average)
+#     Recommended baselines:
+#       Fast models (Haiku, Nova Micro):  WARNING >2000ms, CRITICAL >4000ms
+#       Mid models  (Sonnet, Nova Lite):  WARNING >3000ms, CRITICAL >5000ms
+#       Large models (Opus, Nova Pro):    WARNING >5000ms, CRITICAL >8000ms
 # =============================================================================
 
-# Default thresholds applied to ALL discovered models
-# Default thresholds applied to ALL discovered models
-# =============================================================================
-# NOTE on EstimatedTPMQuotaUsage:
-#   This metric is in raw token count (NOT percentage).
-#   Set threshold based on your actual TPM quota × target percentage.
+models: [] 
+# Uncomment and configure the models you actually use. please remove [] above
+# Only models listed here will have alarms created.
 #
-#   Step 1 — Find your TPM quota:
-#     aws service-quotas list-service-quotas --service-code bedrock \
-#       --region us-east-1 \
-#       --query "Quotas[?contains(QuotaName,'<your model name>')].{Name:QuotaName,Value:Value}"
+#  - model_id: us.anthropic.claude-sonnet-4-6
+#    alarms:
+#      - metric: EstimatedTPMQuotaUsage
+#        # TPM quota = 6,000,000 (Cross-region Anthropic Claude Sonnet 4.6)
+#        threshold_warning: 4800000    # 6,000,000 × 80%
+#        threshold_critical: 5400000   # 6,000,000 × 90%
+#        operator: GreaterThanThreshold
+#        period: 60
+#        evaluation_periods: 3
+#        description: Claude Sonnet 4.6 TPM配额使用率接近上限
 #
-#   Step 2 — Calculate thresholds:
-#     Example: Claude Sonnet 4.6 cross-region TPM quota = 6,000,000
-#       threshold_warning  = 6,000,000 × 80% = 4,800,000
-#       threshold_critical = 6,000,000 × 90% = 5,400,000
+#      - metric: InvocationClientErrors
+#        threshold_warning: 5
+#        threshold_critical: 20
+#        operator: GreaterThanOrEqualToThreshold
+#        period: 300
+#        evaluation_periods: 2
+#        description: Claude Sonnet 4.6调用客户端错误（含throttling 429）
 #
-#   Alarm uses Statistic=Sum, Period=60 → Sum over 60s = tokens per minute
-#   This matches directly against your TPM quota value.
-# =============================================================================
-defaults:
-  - metric: EstimatedTPMQuotaUsage
-    threshold_warning: 80000    # placeholder — set to your TPM quota × 80%
-    threshold_critical: 90000   # placeholder — set to your TPM quota × 90%
-    operator: GreaterThanThreshold
-    period: 60
-    evaluation_periods: 3
-    description: Bedrock模型TPM配额使用率接近上限（请按实际quota调整阈值）
+#      - metric: Invocations
+#        threshold_warning: 1000
+#        operator: GreaterThanThreshold
+#        period: 300
+#        evaluation_periods: 1
+#        description: Claude Sonnet 4.6调用次数异常（5分钟内超过1000次）
+#
+#      - metric: TimeToFirstToken
+#        threshold_warning: 3000     # mid-tier model
+#        threshold_critical: 5000
+#        operator: GreaterThanThreshold
+#        period: 60
+#        evaluation_periods: 3
+#        description: Claude Sonnet 4.6首Token延迟过高（流式响应）
 
-  - metric: InvocationClientErrors
-    threshold_warning: 5
-    threshold_critical: 20
-    operator: GreaterThanOrEqualToThreshold
-    period: 300
-    evaluation_periods: 2
-    description: Bedrock模型调用客户端错误（含throttling 429）
-
-  - metric: Invocations
-    threshold_warning: 1000
-    operator: GreaterThanThreshold
-    period: 300
-    evaluation_periods: 1
-    description: Bedrock模型调用次数异常（5分钟内超过1000次）
-
-  - metric: TimeToFirstToken
-    # Unit: Milliseconds, Statistic: Average
-    # Recommended baselines (adjust based on your model and SLA):
-    #   Fast models (Haiku, Nova Micro):  WARNING >2000ms, CRITICAL >4000ms
-    #   Mid models  (Sonnet, Nova Lite):  WARNING >3000ms, CRITICAL >5000ms
-    #   Large models (Opus, Nova Pro):    WARNING >5000ms, CRITICAL >8000ms
-    # Only emitted for streaming APIs (ConverseStream / InvokeModelWithResponseStream)
-    threshold_warning: 3000     # 3秒 — 用户开始感觉响应慢
-    threshold_critical: 5000    # 5秒 — 明显卡顿，影响用户体验
-    operator: GreaterThanThreshold
-    period: 60
-    evaluation_periods: 3
-    description: Bedrock模型首Token延迟过高（流式响应）
-
-# Per-model overrides — these replace defaults for the specified model
-# Remove a metric from overrides to fall back to defaults
-# Add threshold_critical to create a CRITICAL alarm in addition to WARNING
+# Add more models below following the same format:
 #
-# To add overrides, follow this format:
+#  - model_id: us.anthropic.claude-opus-4-6-v1
+#    alarms:
+#      - metric: EstimatedTPMQuotaUsage
+#        # TPM quota = 3,000,000 (Cross-region Anthropic Claude Opus 4.6)
+#        threshold_warning: 2400000    # 3,000,000 × 80%
+#        threshold_critical: 2700000   # 3,000,000 × 90%
+#        operator: GreaterThanThreshold
+#        period: 60
+#        evaluation_periods: 3
+#        description: Claude Opus 4.6 TPM配额使用率接近上限
 #
-# overrides:
-#   - model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
-#     alarms:
-#       - metric: EstimatedTPMQuotaUsage
-#         # Claude Sonnet 4.6 cross-region TPM quota = 6,000,000
-#         threshold_warning: 4800000   # 6,000,000 × 80%
-#         threshold_critical: 5400000  # 6,000,000 × 90%
-#         operator: GreaterThanThreshold
-#         period: 60
-#         evaluation_periods: 3
-#         description: Claude 3.5 Sonnet TPM配额使用率
+#      - metric: InvocationClientErrors
+#        threshold_warning: 5
+#        threshold_critical: 20
+#        operator: GreaterThanOrEqualToThreshold
+#        period: 300
+#        evaluation_periods: 2
+#        description: Claude Opus 4.6调用客户端错误
 #
-#       - metric: InvocationClientErrors
-#         threshold_warning: 2
-#         threshold_critical: 10
-#         operator: GreaterThanOrEqualToThreshold
-#         period: 300
-#         evaluation_periods: 2
-#         description: Claude 3.5 Sonnet调用错误
+#      - metric: TimeToFirstToken
+#        threshold_warning: 5000     # large model
+#        threshold_critical: 8000
+#        operator: GreaterThanThreshold
+#        period: 60
+#        evaluation_periods: 3
+#        description: Claude Opus 4.6首Token延迟过高
 #
-#       - metric: Invocations
-#         threshold_warning: 500
-#         operator: GreaterThanThreshold
-#         period: 300
-#         evaluation_periods: 1
-#         description: Claude 3.5 Sonnet调用次数异常
+#  - model_id: amazon.titan-embed-text-v2:0
+#    alarms:
+#      - metric: InvocationClientErrors
+#        threshold_warning: 10
+#        threshold_critical: 50
+#        operator: GreaterThanOrEqualToThreshold
+#        period: 300
+#        evaluation_periods: 2
+#        description: Titan Embed调用错误
 #
-#       - metric: TimeToFirstToken
-#         # Claude Sonnet is a mid-tier model — tighter SLA than defaults
-#         threshold_warning: 2000    # 2秒
-#         threshold_critical: 4000   # 4秒
-#         operator: GreaterThanThreshold
-#         period: 60
-#         evaluation_periods: 3
-#         description: Claude 3.5 Sonnet首Token延迟
-#
-#   - model_id: amazon.titan-embed-text-v2:0
-#     alarms:
-#       - metric: InvocationClientErrors
-#         threshold_warning: 10
-#         threshold_critical: 50
-#         operator: GreaterThanOrEqualToThreshold
-#         period: 300
-#         evaluation_periods: 2
-#         description: Titan Embed调用错误
-#
-#       - metric: Invocations
-#         threshold_warning: 5000
-#         operator: GreaterThanThreshold
-#         period: 300
-#         evaluation_periods: 1
-#         description: Titan Embed调用次数异常（embedding调用量通常更高）
+#      - metric: Invocations
+#        threshold_warning: 5000     # embedding calls are typically higher volume
+#        operator: GreaterThanThreshold
+#        period: 300
+#        evaluation_periods: 1
+#        description: Titan Embed调用次数异常

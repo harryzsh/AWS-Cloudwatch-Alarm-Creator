@@ -42,11 +42,12 @@ Resource-Based Stacks (7):
 └─ NAT: 2 alarms per gateway (PacketsDropCount, ErrorPortAllocation WARNING)
 
 Bedrock Stack (1):
-└─ Auto-discovered models: up to 7 alarms per model
+└─ Per-model config (alarm-config-bedrock.yaml): up to 7 alarms per model
    ├─ EstimatedTPMQuotaUsage WARNING/CRITICAL (token count, set to TPM quota × 80%/90%)
    ├─ InvocationClientErrors WARNING/CRITICAL
    ├─ Invocations WARNING
    └─ TimeToFirstToken WARNING/CRITICAL (streaming only, ms)
+   Note: empty by default — configure your models in alarm-config-bedrock.yaml
 ```
 
 Note: EC2 CWAgent alarms are auto-deployed with both `--mode tag-based` and `--mode all`.
@@ -245,73 +246,65 @@ Examples:
 
 ## 🤖 Bedrock Alarm Configuration
 
-Bedrock alarms are automatically included in `--mode all`. They use **auto-discovery + YAML overrides**.
+Bedrock alarms are automatically included in `--mode all`. Configure which models to monitor in `alarm-config-bedrock.yaml`.
 
 ### How It Works
 
-1. Auto-discovers all ModelIds with active CloudWatch data in `AWS/Bedrock`
-2. Applies default thresholds to all discovered models
-3. Models listed in `alarm-config-bedrock.yaml` overrides use custom thresholds instead
-4. No duplicates — override always wins
+- No auto-discovery — only models explicitly listed under `models` will have alarms created
+- By default the config is empty (`models: []`) — no alarms until you configure your models
+- Each model has its own alarm definitions with full control over thresholds
 
-### Default Alarms (applied to every discovered model)
+### Available Metrics
 
-| Metric | WARNING | CRITICAL | Statistic | Description |
-|--------|---------|----------|-----------|-------------|
-| `EstimatedTPMQuotaUsage` | >80,000* | >90,000* | Sum/60s | TPM配额使用率（token count，需按实际quota调整） |
-| `InvocationClientErrors` | ≥5/5min | ≥20/5min | Sum | 调用错误（含throttling 429） |
-| `Invocations` | >1000/5min | — | Sum | 异常调用量保护 |
-| `TimeToFirstToken` | >3000ms | >5000ms | Average | 首Token延迟（仅streaming API） |
+| Metric | Statistic | Unit | Description |
+|--------|-----------|------|-------------|
+| `EstimatedTPMQuotaUsage` | Sum/60s | Token count | TPM配额消耗量（非百分比） |
+| `InvocationClientErrors` | Sum | Count | 调用错误（含throttling 429） |
+| `Invocations` | Sum | Count | 总调用次数 |
+| `TimeToFirstToken` | Average | Milliseconds | 首Token延迟（仅streaming API） |
 
-*`EstimatedTPMQuotaUsage` 阈值需按实际 TPM quota 调整，见下方说明。
+### Setup Steps
 
-### Customize Per-Model Thresholds
-
-**EstimatedTPMQuotaUsage** — threshold is in raw token count (not %). Calculate from your TPM quota:
+**Step 1 — Find your model's TPM quota:**
 
 ```bash
-# Find your TPM quota for a model
 aws service-quotas list-service-quotas --service-code bedrock --region us-east-1 \
   --query "Quotas[?contains(QuotaName,'Sonnet 4.6')].{Name:QuotaName,Value:Value}"
-# Example result: 6,000,000 TPM
-# threshold_warning  = 6,000,000 × 80% = 4,800,000
-# threshold_critical = 6,000,000 × 90% = 5,400,000
+# Example: 6,000,000 TPM
 ```
 
-**TimeToFirstToken** — recommended baselines by model tier:
-
-| Model tier | WARNING | CRITICAL |
-|------------|---------|----------|
-| Fast (Haiku, Nova Micro) | >2000ms | >4000ms |
-| Mid (Sonnet, Nova Lite) | >3000ms | >5000ms |
-| Large (Opus, Nova Pro) | >5000ms | >8000ms |
-
-Edit `alarm-config-bedrock.yaml` and add entries under `overrides`:
+**Step 2 — Edit `alarm-config-bedrock.yaml`**, uncomment and configure your models:
 
 ```yaml
-overrides:
-  - model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
+models:
+  - model_id: us.anthropic.claude-sonnet-4-6
     alarms:
       - metric: EstimatedTPMQuotaUsage
-        threshold_warning: 70        # stricter than default 80%
-        threshold_critical: 85
+        threshold_warning: 4800000    # 6,000,000 × 80%
+        threshold_critical: 5400000   # 6,000,000 × 90%
         operator: GreaterThanThreshold
         period: 60
         evaluation_periods: 3
-        description: Claude 3.5 Sonnet TPM配额使用率
+        description: Claude Sonnet 4.6 TPM配额使用率
 
       - metric: InvocationClientErrors
-        threshold_warning: 2
-        threshold_critical: 10
+        threshold_warning: 5
+        threshold_critical: 20
         operator: GreaterThanOrEqualToThreshold
         period: 300
         evaluation_periods: 2
-        description: Claude 3.5 Sonnet调用错误
+        description: Claude Sonnet 4.6调用错误
+
+      - metric: TimeToFirstToken
+        threshold_warning: 3000
+        threshold_critical: 5000
+        operator: GreaterThanThreshold
+        period: 60
+        evaluation_periods: 3
+        description: Claude Sonnet 4.6首Token延迟
 ```
 
-> **Note:** Override is a full replacement — if you only list one metric in overrides, that model only gets one alarm. Other metrics won't inherit from defaults.
-
-### Deploy Bedrock Alarms Only
+**Step 3 — Deploy:**
 
 ```bash
 python deploy_alarms.py --mode resource-based --service bedrock \
@@ -320,14 +313,15 @@ python deploy_alarms.py --mode resource-based --service bedrock \
   --region us-east-1
 ```
 
-### Monitored Metrics
+### TimeToFirstToken Baselines
 
-| Metric | Namespace | Statistic | Unit | Notes |
-|--------|-----------|-----------|------|-------|
-| `EstimatedTPMQuotaUsage` | AWS/Bedrock | Sum | Count (tokens) | Period=60s, Sum=TPM consumed |
-| `InvocationClientErrors` | AWS/Bedrock | Sum | Count | Includes throttling 429 |
-| `Invocations` | AWS/Bedrock | Sum | Count | Total calls per period |
-| `TimeToFirstToken` | AWS/Bedrock | Average | Milliseconds | Streaming APIs only |
+| Model tier | WARNING | CRITICAL |
+|------------|---------|----------|
+| Fast (Haiku, Nova Micro) | >2000ms | >4000ms |
+| Mid (Sonnet, Nova Lite) | >3000ms | >5000ms |
+| Large (Opus, Nova Pro) | >5000ms | >8000ms |
+
+> If `models: []` (empty), Bedrock deployment is skipped automatically — no errors.
 
 ---
 
