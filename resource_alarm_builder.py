@@ -71,7 +71,8 @@ def _build_alarm_props(alarm_name, description, metrics, threshold, operator):
 
 
 def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, extra_dim_values=None):
-    """Generate alarms using Metrics Insights SQL query. Returns list of (resource_name, alarm)."""
+    """Generate alarms using standard MetricStat (not Metrics Insights SQL).
+    Uses explicit resource dimension — does not count toward Metrics Insights quota."""
 
     metric_name = alarm_config['metric']
     operator = alarm_config['operator']
@@ -80,26 +81,36 @@ def generate_simple_alarm(service_config, resource_id, alarm_config, tag_value, 
     service_name_clean = service_config['name'].replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
     service_short = service_config['name'].split('(')[0].strip().replace(' ', '')
 
-    metric_name_quoted = f'"{metric_name}"' if '.' in metric_name else metric_name
-    dimension_name = service_config["dimension_name"]
-    dimension_name_quoted = f'"{dimension_name}"' if ' ' in dimension_name else dimension_name
+    dimension_name = service_config['dimension_name']
 
     query_id = resource_id
     display_id = resource_id
     if '|' in resource_id:
         display_id, query_id = resource_id.split('|', 1)
 
-    expression = (
-        f'SELECT max({metric_name_quoted}) FROM "{service_config["namespace"]}"'
-        f' WHERE {dimension_name_quoted} = \'{query_id}\''
-    )
-
     results = []
     for threshold, severity in _get_thresholds(alarm_config):
         resource_name = _stable_resource_name(service_name_clean, resource_id, metric_name, severity)
         alarm_name = f"{tag_value}-{service_short}-{display_id}-{metric_name}-{severity}"
-        metrics = [{'Id': 'm1', 'ReturnData': True, 'Expression': expression, 'Period': 300}]
-        alarm = _build_alarm_props(alarm_name, description, metrics, threshold, operator)
+
+        alarm = {
+            'Type': 'AWS::CloudWatch::Alarm',
+            'Properties': {
+                'AlarmName': alarm_name,
+                'AlarmDescription': description,
+                'Namespace': service_config['namespace'],
+                'MetricName': metric_name,
+                'Dimensions': [{'Name': dimension_name, 'Value': query_id}],
+                'Statistic': 'Maximum',
+                'Period': 300,
+                'Threshold': threshold,
+                'ComparisonOperator': operator,
+                'EvaluationPeriods': 2,
+                'TreatMissingData': 'notBreaching',
+                'AlarmActions': [{'Ref': 'SNSTopicArn'}],
+                'OKActions': [{'Ref': 'SNSTopicArn'}]
+            }
+        }
         results.append((resource_name, alarm))
 
     return results
