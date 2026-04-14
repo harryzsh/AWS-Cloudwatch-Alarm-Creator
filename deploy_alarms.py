@@ -14,6 +14,7 @@ import os
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 import resource_alarm_builder
+import bedrock_alarm_builder
 
 
 class _NoAliasDumper(yaml.SafeDumper):
@@ -25,7 +26,7 @@ class _NoAliasDumper(yaml.SafeDumper):
 # Tag-based: EC2, NAT Gateway, VPN (deployed via cloudformation-tag-based-alarms.yaml)
 # Resource-based: Kafka, ACM, ALB, Direct Connect (generated per-resource by resource_alarm_builder)
 TAG_BASED_SERVICES = ['ec2', 'nat-gateway', 'vpn']
-RESOURCE_BASED_SERVICES = ['ec2', 'kafka', 'acm', 'alb', 'directconnect', 'ebs']
+RESOURCE_BASED_SERVICES = ['ec2', 'kafka', 'acm', 'alb', 'directconnect', 'ebs', 'bedrock']
 
 # ANSI color codes for terminal output
 RED = '\033[91m'
@@ -68,7 +69,8 @@ def validate_prerequisites():
     required_files = [
         'cloudformation-tag-based-alarms.yaml',
         'alarm-config-resource-based.yaml',
-        'resource_alarm_builder.py'
+        'resource_alarm_builder.py',
+        'bedrock_alarm_builder.py'
     ]
     
     for file in required_files:
@@ -676,6 +678,73 @@ def deploy_resource_based_alarms(service: str, resource_ids: List[str],
         )
 
 
+def deploy_bedrock_alarms(sns_topic: str, region: str, tag_value: str) -> DeploymentResult:
+    """Deploy Bedrock CloudWatch alarms (auto-discover + yaml overrides)."""
+    cfn = boto3.client('cloudformation', region_name=region)
+    stack_name = 'bedrock-alarms'
+
+    print(f"📦 Deploying Bedrock alarms...")
+    print(f"   Stack: {stack_name}")
+
+    try:
+        template = bedrock_alarm_builder.build_template(tag_value, region)
+        alarm_count = len(template.get('Resources', {}))
+
+        if alarm_count == 0:
+            print(f"  No Bedrock models found and no overrides configured — skipping")
+            return DeploymentResult(
+                service='bedrock', stack_name=stack_name,
+                status='no-change', alarm_count=0, resource_count=0
+            )
+
+        template_body = bedrock_alarm_builder.dump_template(template)
+        template_size = len(template_body.encode('utf-8'))
+        print(f"   Template size: {template_size:,} bytes")
+
+        use_s3 = template_size > 51200
+        template_url = None
+        if use_s3:
+            print(f"   Template exceeds 51KB, uploading to S3...")
+            template_url = upload_template_to_s3(template_body, f'{stack_name}.yaml', region)
+
+        stack_args = {
+            'StackName': stack_name,
+            'Parameters': [{'ParameterKey': 'SNSTopicArn', 'ParameterValue': sns_topic}]
+        }
+        if use_s3:
+            stack_args['TemplateURL'] = template_url
+        else:
+            stack_args['TemplateBody'] = template_body
+
+        try:
+            cfn.describe_stacks(StackName=stack_name)
+            print(f"   Stack exists, updating...")
+            try:
+                cfn.update_stack(**stack_args)
+                print(f"✓ Stack update initiated")
+                return DeploymentResult(service='bedrock', stack_name=stack_name,
+                                        status='updated', alarm_count=alarm_count, resource_count=alarm_count)
+            except cfn.exceptions.ClientError as e:
+                if 'No updates are to be performed' in str(e):
+                    print(f"  No changes needed")
+                    return DeploymentResult(service='bedrock', stack_name=stack_name,
+                                            status='no-change', alarm_count=alarm_count, resource_count=alarm_count)
+                raise
+        except cfn.exceptions.ClientError as e:
+            if 'does not exist' in str(e):
+                print(f"   Creating new stack...")
+                cfn.create_stack(**stack_args)
+                print(f"✓ Stack creation initiated")
+                return DeploymentResult(service='bedrock', stack_name=stack_name,
+                                        status='created', alarm_count=alarm_count, resource_count=alarm_count)
+            raise
+
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        return DeploymentResult(service='bedrock', stack_name=stack_name,
+                                status='failed', alarm_count=0, resource_count=0, error_message=str(e))
+
+
 def main():
     import argparse
     
@@ -765,9 +834,12 @@ Examples:
             print(f"{RED}  No EC2 instances found with tag {args.tag_key}={args.tag_value} — skipping{RESET}")
     
     elif args.mode == 'resource-based':
+        # Bedrock has its own discovery logic
+        if args.service == 'bedrock':
+            result = deploy_bedrock_alarms(args.sns_topic, args.region, args.tag_value)
+            results.append(result)
         # Get resource IDs via tag-based discovery or manual list
-        if args.resources:
-            # Manual override - use specified resources
+        elif args.resources:            # Manual override - use specified resources
             resource_ids = args.resources
             print(f"   Using manually specified resources: {', '.join(resource_ids)}")
             bandwidth = None
@@ -785,21 +857,21 @@ Examples:
                 resource_ids = discovered
                 bandwidth = None
         
-        if not resource_ids:
-            print(f"{RED}✗ No {args.service} resources found with tag {args.tag_key}={args.tag_value} — skipping{RESET}")
-        else:
-            result = deploy_resource_based_alarms(
-                args.service,
-                resource_ids,
-                args.sns_topic,
-                args.region,
-                args.tag_value,
-                bandwidth
-            )
-            results.append(result)
-    
+        if args.service != 'bedrock':
+            if not resource_ids:
+                print(f"{RED}✗ No {args.service} resources found with tag {args.tag_key}={args.tag_value} — skipping{RESET}")
+            else:
+                result = deploy_resource_based_alarms(
+                    args.service,
+                    resource_ids,
+                    args.sns_topic,
+                    args.region,
+                    args.tag_value,
+                    bandwidth
+                )
+                results.append(result)
+
     elif args.mode == 'all':
-        # Deploy tag-based first
         print("\n" + "=" * 60)
         print("PHASE 1: Tag-Based Alarms (EC2, NAT Gateway, VPN)")
         print("=" * 60)
@@ -817,6 +889,8 @@ Examples:
         print("=" * 60)
         
         for service in RESOURCE_BASED_SERVICES:
+            if service == 'bedrock':
+                continue  # handled separately in PHASE 3
             print(f"\n--- {service.upper()} ---")
             discovered = discover_resources(service, args.region, args.tag_key, args.tag_value)
             
@@ -845,7 +919,14 @@ Examples:
                 results.append(result)
             else:
                 print(f"{RED}  No {service} resources found with tag {args.tag_key}={args.tag_value} — skipping{RESET}")
-    
+
+        # Deploy Bedrock alarms (auto-discover + yaml overrides)
+        print("\n" + "=" * 60)
+        print("PHASE 3: Bedrock Alarms (Auto-discover + YAML overrides)")
+        print("=" * 60)
+        result = deploy_bedrock_alarms(args.sns_topic, args.region, args.tag_value)
+        results.append(result)
+
     # Print summary
     print("\n" + "=" * 60)
     print("📊 Deployment Summary")

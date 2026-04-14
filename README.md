@@ -40,6 +40,13 @@ Resource-Based Stacks (7):
 ├─ EBS: 3 alarms per volume (ThroughputExceeded, IOPSExceeded, StalledIO WARNING)
 ├─ EFS: up to 2 alarms per file system (PercentIOLimit WARNING/CRITICAL)
 └─ NAT: 2 alarms per gateway (PacketsDropCount, ErrorPortAllocation WARNING)
+
+Bedrock Stack (1):
+└─ Auto-discovered models: up to 7 alarms per model
+   ├─ EstimatedTPMQuotaUsage WARNING/CRITICAL (token count, set to TPM quota × 80%/90%)
+   ├─ InvocationClientErrors WARNING/CRITICAL
+   ├─ Invocations WARNING
+   └─ TimeToFirstToken WARNING/CRITICAL (streaming only, ms)
 ```
 
 Note: EC2 CWAgent alarms are auto-deployed with both `--mode tag-based` and `--mode all`.
@@ -236,6 +243,94 @@ Examples:
 
 ---
 
+## 🤖 Bedrock Alarm Configuration
+
+Bedrock alarms are automatically included in `--mode all`. They use **auto-discovery + YAML overrides**.
+
+### How It Works
+
+1. Auto-discovers all ModelIds with active CloudWatch data in `AWS/Bedrock`
+2. Applies default thresholds to all discovered models
+3. Models listed in `alarm-config-bedrock.yaml` overrides use custom thresholds instead
+4. No duplicates — override always wins
+
+### Default Alarms (applied to every discovered model)
+
+| Metric | WARNING | CRITICAL | Statistic | Description |
+|--------|---------|----------|-----------|-------------|
+| `EstimatedTPMQuotaUsage` | >80,000* | >90,000* | Sum/60s | TPM配额使用率（token count，需按实际quota调整） |
+| `InvocationClientErrors` | ≥5/5min | ≥20/5min | Sum | 调用错误（含throttling 429） |
+| `Invocations` | >1000/5min | — | Sum | 异常调用量保护 |
+| `TimeToFirstToken` | >3000ms | >5000ms | Average | 首Token延迟（仅streaming API） |
+
+*`EstimatedTPMQuotaUsage` 阈值需按实际 TPM quota 调整，见下方说明。
+
+### Customize Per-Model Thresholds
+
+**EstimatedTPMQuotaUsage** — threshold is in raw token count (not %). Calculate from your TPM quota:
+
+```bash
+# Find your TPM quota for a model
+aws service-quotas list-service-quotas --service-code bedrock --region us-east-1 \
+  --query "Quotas[?contains(QuotaName,'Sonnet 4.6')].{Name:QuotaName,Value:Value}"
+# Example result: 6,000,000 TPM
+# threshold_warning  = 6,000,000 × 80% = 4,800,000
+# threshold_critical = 6,000,000 × 90% = 5,400,000
+```
+
+**TimeToFirstToken** — recommended baselines by model tier:
+
+| Model tier | WARNING | CRITICAL |
+|------------|---------|----------|
+| Fast (Haiku, Nova Micro) | >2000ms | >4000ms |
+| Mid (Sonnet, Nova Lite) | >3000ms | >5000ms |
+| Large (Opus, Nova Pro) | >5000ms | >8000ms |
+
+Edit `alarm-config-bedrock.yaml` and add entries under `overrides`:
+
+```yaml
+overrides:
+  - model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
+    alarms:
+      - metric: EstimatedTPMQuotaUsage
+        threshold_warning: 70        # stricter than default 80%
+        threshold_critical: 85
+        operator: GreaterThanThreshold
+        period: 60
+        evaluation_periods: 3
+        description: Claude 3.5 Sonnet TPM配额使用率
+
+      - metric: InvocationClientErrors
+        threshold_warning: 2
+        threshold_critical: 10
+        operator: GreaterThanOrEqualToThreshold
+        period: 300
+        evaluation_periods: 2
+        description: Claude 3.5 Sonnet调用错误
+```
+
+> **Note:** Override is a full replacement — if you only list one metric in overrides, that model only gets one alarm. Other metrics won't inherit from defaults.
+
+### Deploy Bedrock Alarms Only
+
+```bash
+python deploy_alarms.py --mode resource-based --service bedrock \
+  --tag-key Environment --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
+### Monitored Metrics
+
+| Metric | Namespace | Statistic | Unit | Notes |
+|--------|-----------|-----------|------|-------|
+| `EstimatedTPMQuotaUsage` | AWS/Bedrock | Sum | Count (tokens) | Period=60s, Sum=TPM consumed |
+| `InvocationClientErrors` | AWS/Bedrock | Sum | Count | Includes throttling 429 |
+| `Invocations` | AWS/Bedrock | Sum | Count | Total calls per period |
+| `TimeToFirstToken` | AWS/Bedrock | Average | Milliseconds | Streaming APIs only |
+
+---
+
 ## 🔧 Configuration
 
 ### Modify Alarm Thresholds
@@ -295,9 +390,12 @@ A: The CloudWatch Agent must be installed on EC2 instances to collect these metr
 
 | File | Description |
 |------|-------------|
-| `cloudformation-tag-based-alarms.yaml` | Tag-based CloudFormation template (10 alarms) || `alarm-config-resource-based.yaml` | Resource-based alarm configuration (Kafka, ACM, ALB, Direct Connect) |
+| `cloudformation-tag-based-alarms.yaml` | Tag-based CloudFormation template (10 alarms) |
+| `alarm-config-resource-based.yaml` | Resource-based alarm configuration (Kafka, ACM, ALB, Direct Connect) |
+| `alarm-config-bedrock.yaml` | Bedrock alarm configuration (defaults + per-model overrides) |
 | `deploy_alarms.py` | Main deployment script |
 | `resource_alarm_builder.py` | Template builder for resource-based alarms |
+| `bedrock_alarm_builder.py` | Template builder for Bedrock alarms (auto-discover + overrides) |
 | `METRICS_REFERENCE.md` | Detailed metrics reference with thresholds and descriptions |
 | `README.md` | This file |
 

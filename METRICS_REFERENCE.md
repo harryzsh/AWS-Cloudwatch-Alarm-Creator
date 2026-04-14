@@ -24,6 +24,7 @@ Complete list of all monitored metrics, thresholds, and alarm configurations.
     - [EBS](#ebs)
     - [EFS](#efs)
     - [NAT Gateway (Resource-Based)](#nat-gateway-resource-based)
+  - [Bedrock Alarms](#bedrock-alarms)
   - [Severity Levels](#severity-levels)
   - [Common Alarm Settings](#common-alarm-settings)
   - [References](#references)
@@ -196,8 +197,40 @@ Math Expression: `ConnectionBpsIngress/bandwidth*100`. Bandwidth auto-detected f
 
 ---
 
-## Severity Levels
+## Bedrock Alarms
 
+Deployed via `bedrock_alarm_builder.py`. Auto-discovers active ModelIds from `AWS/Bedrock` namespace and applies default thresholds. Per-model overrides configured in `alarm-config-bedrock.yaml`.
+
+**Stack:** `bedrock-alarms`  
+**Naming:** `{TagValue}-Bedrock-{ModelId}-{Metric}-{SEVERITY}`  
+**Dimension:** `ModelId`
+
+| Metric | Statistic | WARNING | CRITICAL | Period | Notes |
+|--------|-----------|---------|----------|--------|-------|
+| `EstimatedTPMQuotaUsage` | Sum | >80,000* | >90,000* | 60s×3 | Raw token count — set to TPM quota × 80%/90% |
+| `InvocationClientErrors` | Sum | ≥5 | ≥20 | 300s×2 | Includes throttling 429 errors |
+| `Invocations` | Sum | >1000 | — | 300s×1 | Abnormal call volume protection |
+| `TimeToFirstToken` | Average | >3000ms | >5000ms | 60s×3 | Streaming APIs only (ConverseStream, InvokeModelWithResponseStream) |
+
+*`EstimatedTPMQuotaUsage` default thresholds are placeholders. Calculate from your actual TPM quota:
+```
+threshold_warning  = TPM_quota × 80%
+threshold_critical = TPM_quota × 90%
+```
+
+**TimeToFirstToken recommended baselines by model tier:**
+
+| Model tier | WARNING | CRITICAL |
+|------------|---------|----------|
+| Fast (Haiku, Nova Micro) | >2000ms | >4000ms |
+| Mid (Sonnet, Nova Lite) | >3000ms | >5000ms |
+| Large (Opus, Nova Pro) | >5000ms | >8000ms |
+
+**Override logic:** Models listed in `alarm-config-bedrock.yaml` overrides use custom thresholds (full replacement — defaults do not apply to overridden models).
+
+---
+
+## Severity Levels
 | Severity | Suffix | Meaning |
 |----------|--------|---------|
 | WARNING | `-WARNING` | 预警阈值 — 需要关注，可能需要介入 |
