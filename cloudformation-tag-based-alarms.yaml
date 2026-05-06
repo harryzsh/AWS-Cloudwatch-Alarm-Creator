@@ -22,7 +22,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-CPUUtilization-Info
+        Fn::Sub: TSP-${TagValue}-EC2-CPUUtilization-Info
       AlarmDescription: 服务器CPU使用?- Info级别告警
       Metrics:
       - Id: m1
@@ -41,7 +41,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-CPUUtilization-Warning
+        Fn::Sub: TSP-${TagValue}-EC2-CPUUtilization-Warning
       AlarmDescription: 服务器CPU使用?- Warning级别告警
       Metrics:
       - Id: m1
@@ -60,7 +60,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-CPUUtilization-Critical
+        Fn::Sub: TSP-${TagValue}-EC2-CPUUtilization-Critical
       AlarmDescription: 服务器CPU使用?- Critical级别告警
       Metrics:
       - Id: m1
@@ -79,7 +79,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkIn-Info
+        Fn::Sub: TSP-${TagValue}-EC2-NetworkIn-Info
       AlarmDescription: 网络入口带宽 - Info级别告警
       Metrics:
       - Id: m1
@@ -98,7 +98,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkIn-Warning
+        Fn::Sub: TSP-${TagValue}-EC2-NetworkIn-Warning
       AlarmDescription: 网络入口带宽 - Warning级别告警
       Metrics:
       - Id: m1
@@ -117,7 +117,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkOut-Info
+        Fn::Sub: TSP-${TagValue}-EC2-NetworkOut-Info
       AlarmDescription: 网络出口带宽 - Info级别告警
       Metrics:
       - Id: m1
@@ -136,7 +136,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-NetworkOut-Warning
+        Fn::Sub: TSP-${TagValue}-EC2-NetworkOut-Warning
       AlarmDescription: 网络出口带宽 - Warning级别告警
       Metrics:
       - Id: m1
@@ -155,7 +155,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed-Critical
+        Fn::Sub: TSP-${TagValue}-EC2-StatusCheckFailed-Critical
       AlarmDescription: EC2状态检查失败 - 系统或实例问题
       Metrics:
       - Id: m1
@@ -174,7 +174,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed_System-Critical
+        Fn::Sub: TSP-${TagValue}-EC2-StatusCheckFailed_System-Critical
       AlarmDescription: EC2系统状态检查失败 - AWS基础设施问题
       Metrics:
       - Id: m1
@@ -193,7 +193,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed_Instance-Critical
+        Fn::Sub: TSP-${TagValue}-EC2-StatusCheckFailed_Instance-Critical
       AlarmDescription: EC2实例状态检查失败 - 实例配置问题
       Metrics:
       - Id: m1
@@ -212,7 +212,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EC2-StatusCheckFailed_AttachedEBS-Critical
+        Fn::Sub: TSP-${TagValue}-EC2-StatusCheckFailed_AttachedEBS-Critical
       AlarmDescription: EC2附加EBS卷状态检查失败 - 存储连接问题
       Metrics:
       - Id: m1
@@ -231,7 +231,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-EngineCPUUtilization-Info
+        Fn::Sub: TSP-${TagValue}-Redis-EngineCPUUtilization-Info
       AlarmDescription: Redis引擎CPU使用率 - Redis单线程CPU使用率
       Metrics:
       - Id: m1
@@ -250,7 +250,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-EngineCPUUtilization-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-EngineCPUUtilization-Warning
       AlarmDescription: Redis引擎CPU使用率 - Redis单线程CPU使用率
       Metrics:
       - Id: m1
@@ -269,7 +269,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-EngineCPUUtilization-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-EngineCPUUtilization-Critical
       AlarmDescription: Redis引擎CPU使用率 - Redis单线程CPU使用率
       Metrics:
       - Id: m1
@@ -288,7 +288,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-DatabaseMemoryUsagePercentage-Info
+        Fn::Sub: TSP-${TagValue}-Redis-DatabaseMemoryUsagePercentage-Info
       AlarmDescription: 内存使用率 - 数据库内存使用百分比
       Metrics:
       - Id: m1
@@ -308,7 +308,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-DatabaseMemoryUsagePercentage-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-DatabaseMemoryUsagePercentage-Warning
       AlarmDescription: 内存使用率 - 数据库内存使用百分比
       Metrics:
       - Id: m1
@@ -328,7 +328,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-DatabaseMemoryUsagePercentage-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-DatabaseMemoryUsagePercentage-Critical
       AlarmDescription: 内存使用率 - 数据库内存使用百分比
       Metrics:
       - Id: m1
@@ -348,7 +348,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CurrConnections-Info
+        Fn::Sub: TSP-${TagValue}-Redis-CurrConnections-Info
       AlarmDescription: 当前连接数 - 客户端连接数量
       Metrics:
       - Id: m1
@@ -367,7 +367,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CurrConnections-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-CurrConnections-Warning
       AlarmDescription: 当前连接数 - 客户端连接数量
       Metrics:
       - Id: m1
@@ -386,7 +386,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CurrConnections-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-CurrConnections-Critical
       AlarmDescription: 当前连接数 - 客户端连接数量
       Metrics:
       - Id: m1
@@ -405,7 +405,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-Evictions-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-Evictions-Warning
       AlarmDescription: 键驱逐数 - 内存不足导致的键驱逐
       Metrics:
       - Id: m1
@@ -424,7 +424,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-Evictions-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-Evictions-Critical
       AlarmDescription: 键驱逐数 - 内存不足导致的键驱逐
       Metrics:
       - Id: m1
@@ -443,7 +443,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CacheHitRate-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-CacheHitRate-Warning
       AlarmDescription: 缓存命中率 - 缓存效率指标
       Metrics:
       - Id: m1
@@ -462,7 +462,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-CacheHitRate-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-CacheHitRate-Critical
       AlarmDescription: 缓存命中率 - 缓存效率指标
       Metrics:
       - Id: m1
@@ -481,7 +481,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-ReplicationLag-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-ReplicationLag-Warning
       AlarmDescription: 复制延迟 - 主从复制延迟时间
       Metrics:
       - Id: m1
@@ -500,7 +500,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-ReplicationLag-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-ReplicationLag-Critical
       AlarmDescription: 复制延迟 - 主从复制延迟时间
       Metrics:
       - Id: m1
@@ -519,7 +519,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesIn-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-NetworkBytesIn-Warning
       AlarmDescription: 网络入流量 - 网络接收字节数
       Metrics:
       - Id: m1
@@ -538,7 +538,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesIn-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-NetworkBytesIn-Critical
       AlarmDescription: 网络入流量 - 网络接收字节数
       Metrics:
       - Id: m1
@@ -557,7 +557,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesOut-Warning
+        Fn::Sub: TSP-${TagValue}-Redis-NetworkBytesOut-Warning
       AlarmDescription: 网络出流量 - 网络发送字节数
       Metrics:
       - Id: m1
@@ -576,7 +576,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-Redis-NetworkBytesOut-Critical
+        Fn::Sub: TSP-${TagValue}-Redis-NetworkBytesOut-Critical
       AlarmDescription: 网络出流量 - 网络发送字节数
       Metrics:
       - Id: m1
@@ -595,7 +595,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DatabaseConnections-Info
+        Fn::Sub: TSP-${TagValue}-RDS-DatabaseConnections-Info
       AlarmDescription: RDS数据库连接数
       Metrics:
       - Id: m1
@@ -614,7 +614,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DatabaseConnections-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-DatabaseConnections-Warning
       AlarmDescription: RDS数据库连接数
       Metrics:
       - Id: m1
@@ -633,7 +633,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DatabaseConnections-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-DatabaseConnections-Critical
       AlarmDescription: RDS数据库连接数
       Metrics:
       - Id: m1
@@ -652,7 +652,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-CPUUtilization-Info
+        Fn::Sub: TSP-${TagValue}-RDS-CPUUtilization-Info
       AlarmDescription: RDS CPU使用率
       Metrics:
       - Id: m1
@@ -671,7 +671,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-CPUUtilization-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-CPUUtilization-Warning
       AlarmDescription: RDS CPU使用率
       Metrics:
       - Id: m1
@@ -690,7 +690,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-CPUUtilization-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-CPUUtilization-Critical
       AlarmDescription: RDS CPU使用率
       Metrics:
       - Id: m1
@@ -709,7 +709,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeableMemory-Info
+        Fn::Sub: TSP-${TagValue}-RDS-FreeableMemory-Info
       AlarmDescription: RDS可用内存
       Metrics:
       - Id: m1
@@ -728,7 +728,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeableMemory-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-FreeableMemory-Warning
       AlarmDescription: RDS可用内存
       Metrics:
       - Id: m1
@@ -747,7 +747,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeableMemory-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-FreeableMemory-Critical
       AlarmDescription: RDS可用内存
       Metrics:
       - Id: m1
@@ -766,7 +766,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeStorageSpace-Info
+        Fn::Sub: TSP-${TagValue}-RDS-FreeStorageSpace-Info
       AlarmDescription: RDS可用存储空间
       Metrics:
       - Id: m1
@@ -785,7 +785,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeStorageSpace-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-FreeStorageSpace-Warning
       AlarmDescription: RDS可用存储空间
       Metrics:
       - Id: m1
@@ -804,7 +804,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-FreeStorageSpace-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-FreeStorageSpace-Critical
       AlarmDescription: RDS可用存储空间
       Metrics:
       - Id: m1
@@ -823,7 +823,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadIOPS-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-ReadIOPS-Warning
       AlarmDescription: RDS读IOPS
       Metrics:
       - Id: m1
@@ -842,7 +842,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadIOPS-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-ReadIOPS-Critical
       AlarmDescription: RDS读IOPS
       Metrics:
       - Id: m1
@@ -861,7 +861,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteIOPS-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-WriteIOPS-Warning
       AlarmDescription: RDS写IOPS
       Metrics:
       - Id: m1
@@ -880,7 +880,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteIOPS-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-WriteIOPS-Critical
       AlarmDescription: RDS写IOPS
       Metrics:
       - Id: m1
@@ -899,7 +899,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadLatency-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-ReadLatency-Warning
       AlarmDescription: RDS读延迟
       Metrics:
       - Id: m1
@@ -918,7 +918,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReadLatency-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-ReadLatency-Critical
       AlarmDescription: RDS读延迟
       Metrics:
       - Id: m1
@@ -937,7 +937,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteLatency-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-WriteLatency-Warning
       AlarmDescription: RDS写延迟
       Metrics:
       - Id: m1
@@ -956,7 +956,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-WriteLatency-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-WriteLatency-Critical
       AlarmDescription: RDS写延迟
       Metrics:
       - Id: m1
@@ -975,7 +975,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReplicaLag-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-ReplicaLag-Warning
       AlarmDescription: RDS复制延迟
       Metrics:
       - Id: m1
@@ -994,7 +994,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-ReplicaLag-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-ReplicaLag-Critical
       AlarmDescription: RDS复制延迟
       Metrics:
       - Id: m1
@@ -1013,7 +1013,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DiskQueueDepth-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-DiskQueueDepth-Warning
       AlarmDescription: RDS磁盘队列深度 - IO等待队列过长
       Metrics:
       - Id: m1
@@ -1032,7 +1032,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-DiskQueueDepth-Critical
+        Fn::Sub: TSP-${TagValue}-RDS-DiskQueueDepth-Critical
       AlarmDescription: RDS磁盘队列深度 - IO等待队列过长
       Metrics:
       - Id: m1
@@ -1051,7 +1051,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-RDS-BurstBalance-Warning
+        Fn::Sub: TSP-${TagValue}-RDS-BurstBalance-Warning
       AlarmDescription: RDS突发余额 - GP2卷IOPS积分不足
       Metrics:
       - Id: m1
@@ -1070,7 +1070,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-ClientConnections-Info
+        Fn::Sub: TSP-${TagValue}-EFS-ClientConnections-Info
       AlarmDescription: EFS客户端连接数
       Metrics:
       - Id: m1
@@ -1089,7 +1089,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-ClientConnections-Warning
+        Fn::Sub: TSP-${TagValue}-EFS-ClientConnections-Warning
       AlarmDescription: EFS客户端连接数
       Metrics:
       - Id: m1
@@ -1108,7 +1108,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-ClientConnections-Critical
+        Fn::Sub: TSP-${TagValue}-EFS-ClientConnections-Critical
       AlarmDescription: EFS客户端连接数
       Metrics:
       - Id: m1
@@ -1127,7 +1127,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-PercentIOLimit-Info
+        Fn::Sub: TSP-${TagValue}-EFS-PercentIOLimit-Info
       AlarmDescription: EFS IO限制百分比
       Metrics:
       - Id: m1
@@ -1146,7 +1146,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-PercentIOLimit-Warning
+        Fn::Sub: TSP-${TagValue}-EFS-PercentIOLimit-Warning
       AlarmDescription: EFS IO限制百分比
       Metrics:
       - Id: m1
@@ -1165,7 +1165,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-PercentIOLimit-Critical
+        Fn::Sub: TSP-${TagValue}-EFS-PercentIOLimit-Critical
       AlarmDescription: EFS IO限制百分比
       Metrics:
       - Id: m1
@@ -1184,7 +1184,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-BurstCreditBalance-Warning
+        Fn::Sub: TSP-${TagValue}-EFS-BurstCreditBalance-Warning
       AlarmDescription: EFS突发积分余额
       Metrics:
       - Id: m1
@@ -1203,7 +1203,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${TagValue}-EFS-BurstCreditBalance-Critical
+        Fn::Sub: TSP-${TagValue}-EFS-BurstCreditBalance-Critical
       AlarmDescription: EFS突发积分余额
       Metrics:
       - Id: m1

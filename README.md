@@ -52,6 +52,23 @@ Based on AWS official documentation and best practices:
 
 ---
 
+## 📛 Alarm Naming Convention
+
+All alarms use the prefix **`TSP-`** followed by the tag value, service, (resource id for resource-based), metric, and severity:
+
+```
+TSP-{TagValue}-{Service}-[{ResourceId}-]{Metric}-{Severity}
+```
+
+Examples:
+- `TSP-EM-SNC-CLOUD-EC2-CPUUtilization-Critical`
+- `TSP-EM-SNC-CLOUD-RDS-FreeStorageSpace-Warning`
+- `TSP-EM-SNC-CLOUD-MSK-publicMSK-CpuUser-Warning`
+- `TSP-EM-SNC-CLOUD-OpenSearch-mytestos-ClusterStatus.red-Critical`
+- `TSP-EM-SNC-CLOUD-EKS-prod-cluster-EC2-StatusCheckFailed_System-Critical`
+
+---
+
 ## 🚀 Installation
 
 ### Prerequisites
@@ -173,12 +190,18 @@ GROUP BY tag.Name
 
 ### Resource-Based Alarms
 
-Creates dedicated alarms for each resource:
+Creates dedicated alarms for each resource using Metrics Insights SQL:
 
 ```sql
-SELECT MAX(CPUUtilization) FROM "AWS/DocDB" 
+SELECT max(CPUUtilization) FROM "AWS/DocDB"
 WHERE DBClusterIdentifier = 'my-cluster'
 ```
+
+**Why Metrics Insights and not standard alarms?** Many service metrics publish
+with multiple dimensions (e.g. MSK `CpuUser` uses `Cluster Name + Broker ID`
+together). A standard alarm specifying only one of those dimensions would
+match nothing. Metrics Insights aggregates across unspecified dimensions, so
+one alarm per resource correctly covers all brokers/instances/shards.
 
 **Use for:**
 - Services without tag-based telemetry support
@@ -236,6 +259,83 @@ A: Yes! Use `--mode resource-based --service <name>`.
 
 **Q: Is it safe to run daily?**  
 A: Yes! Updates are idempotent and zero-downtime.
+
+**Q: I hit the "Metrics Insights alarm limit exceeded" error. What do I do?**
+A: Resource-based alarms now emit as **standard CloudWatch alarms** (not Metrics
+Insights), so they count against the 5000/region alarm quota, not the 200
+Metrics Insights quota. The only alarms using Metrics Insights are the
+tag-based ones (`cloudformation-tag-based-alarms.yaml` + EKS EC2 node alarms),
+which need `GROUP BY tag.Name` to cover many resources with a single alarm.
+That leaves plenty of headroom — expect ~75 Metrics Insights alarms max.
+
+If you do hit the Metrics Insights limit despite that (possible with many EKS
+clusters), request a Service Quotas increase on CloudWatch → "Number of Metrics
+Insights alarms". Default 50, adjustable up to 200 via the console.
+
+**Q: How do Kafka/DocDB per-broker/per-instance alarms work?**
+A: These metrics publish with multiple dimensions (Cluster Name + Broker ID
+for MSK, DBClusterIdentifier + DBInstanceIdentifier for DocDB). The deploy
+script discovers those sub-resources and the generator fans out — one alarm
+per (resource, sub-resource) pair for `scope: broker` / `scope: instance`
+metrics, one alarm per resource for `scope: cluster` metrics. No Metrics
+Insights needed.
+
+---
+
+## 🔄 Migration: Upgrading from the Metrics Insights version
+
+If you previously deployed an older version of this project (which used Metrics
+Insights SQL for resource-based alarms), upgrading is straightforward because
+the stack names stay the same. CloudFormation detects the alarm resource
+property changes and replaces the alarm types in-place.
+
+**Steps:**
+
+1. Pull the latest code:
+   ```bash
+   git pull
+   ```
+
+2. Redeploy each resource-based stack. Use the same flags you used before:
+   ```bash
+   for svc in opensearch kafka rabbitmq waf docdb alb; do
+     python deploy-cloudwatch-alarms.py --mode resource-based --service $svc \
+       --tag-key businessTag --tag-value EM-SNC-CLOUD \
+       --sns-topic arn:aws:sns:us-east-1:ACCOUNT:topic \
+       --region us-east-1
+   done
+   ```
+
+   For each stack CloudFormation will:
+   - Delete old Metrics Insights–based alarms
+   - Create new standard alarms with the same names
+   - Keep SNS subscriptions on the topic intact
+
+3. (Optional) Redeploy tag-based alarms to pick up the TSP- naming prefix:
+   ```bash
+   python deploy-cloudwatch-alarms.py --mode tag-based \
+     --tag-key businessTag --tag-value EM-SNC-CLOUD \
+     --sns-topic arn:aws:sns:us-east-1:ACCOUNT:topic \
+     --region us-east-1
+   ```
+
+**What changes:**
+- Resource-based alarm count may go up because per-broker (Kafka) and per-instance (DocDB) metrics now fan out into one alarm per broker/instance instead of one aggregated Metrics Insights alarm. This is the whole point of the change — standard alarms live on the 5000/region quota, Metrics Insights live on the 200/region quota.
+- Alarm names still follow `TSP-{TagValue}-{Service}-{Resource}-...` convention. Kafka alarms add the broker ID: `TSP-EM-SNC-CLOUD-MSK-my-cluster-1-CpuUser-Critical`. DocDB instance-scope alarms add the instance ID.
+- Alarm history resets for the replaced alarms (state reverts to `INSUFFICIENT_DATA` briefly, then settles).
+
+**What stays the same:**
+- SNS topic wiring — notifications continue to flow uninterrupted
+- Tag-based alarms in `cloudformation-tag-based-alarms.yaml` (unchanged behavior, still use Metrics Insights by necessity)
+- EKS EC2 node alarms (also still Metrics Insights)
+
+**Quick verification after redeploy:**
+```bash
+aws cloudwatch describe-alarms --region us-east-1 \
+  --alarm-name-prefix "TSP-" \
+  --query "MetricAlarms[?Metrics != null] | length(@)" --output text
+```
+That number should equal the count of tag-based + EKS EC2 alarms only. Resource-based alarms have moved off Metrics Insights, so they will not show up in this query.
 
 ---
 

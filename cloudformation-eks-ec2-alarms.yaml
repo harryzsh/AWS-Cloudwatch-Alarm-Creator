@@ -21,7 +21,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-CPUUtilization-Info
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-CPUUtilization-Info
       AlarmDescription: EKS节点CPU使用率 - Info级别告警
       Metrics:
       - Id: m1
@@ -39,7 +39,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-CPUUtilization-Warning
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-CPUUtilization-Warning
       AlarmDescription: EKS节点CPU使用率 - Warning级别告警
       Metrics:
       - Id: m1
@@ -57,7 +57,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-CPUUtilization-Critical
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-CPUUtilization-Critical
       AlarmDescription: EKS节点CPU使用率 - Critical级别告警
       Metrics:
       - Id: m1
@@ -75,7 +75,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkIn-Info
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkIn-Info
       AlarmDescription: EKS节点网络入口带宽 - Info级别告警
       Metrics:
       - Id: m1
@@ -93,7 +93,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkIn-Warning
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkIn-Warning
       AlarmDescription: EKS节点网络入口带宽 - Warning级别告警
       Metrics:
       - Id: m1
@@ -111,7 +111,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkOut-Info
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkOut-Info
       AlarmDescription: EKS节点网络出口带宽 - Info级别告警
       Metrics:
       - Id: m1
@@ -129,7 +129,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkOut-Warning
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-NetworkOut-Warning
       AlarmDescription: EKS节点网络出口带宽 - Warning级别告警
       Metrics:
       - Id: m1
@@ -147,7 +147,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed-Critical
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed-Critical
       AlarmDescription: EKS节点状态检查失败 - 系统或实例问题
       Metrics:
       - Id: m1
@@ -165,7 +165,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed_System-Critical
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed_System-Critical
       AlarmDescription: EKS节点系统状态检查失败 - AWS基础设施问题
       Metrics:
       - Id: m1
@@ -183,7 +183,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed_Instance-Critical
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed_Instance-Critical
       AlarmDescription: EKS节点实例状态检查失败 - 实例配置问题
       Metrics:
       - Id: m1
@@ -201,7 +201,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: ${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed_AttachedEBS-Critical
+        Fn::Sub: TSP-${BusinessTagValue}-EKS-${EKSClusterName}-EC2-StatusCheckFailed_AttachedEBS-Critical
       AlarmDescription: EKS节点附加EBS卷状态检查失败 - 存储连接问题
       Metrics:
       - Id: m1

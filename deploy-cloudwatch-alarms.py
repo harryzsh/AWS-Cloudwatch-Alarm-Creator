@@ -390,27 +390,104 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str) 
         return []
 
 
-def generate_resource_based_template(service: str, resource_ids: List[str], tag_value: str) -> str:
-    """Generate CloudFormation template for resource-based alarms"""
-    
+def discover_sub_resources(service: str, resource_id: str, region: str) -> List[str]:
+    """Discover sub-resources that are needed as a second CloudWatch dimension.
+
+    Kafka: returns broker IDs (dimension 'Broker ID').
+    DocDB: returns DB instance identifiers (dimension 'DBInstanceIdentifier').
+    Other services return [].
+    """
+    if service == 'kafka':
+        try:
+            kafka = boto3.client('kafka', region_name=region)
+            # list-nodes expects the cluster ARN
+            clusters = kafka.list_clusters()['ClusterInfoList']
+            cluster_arn = next(
+                (c['ClusterArn'] for c in clusters if c['ClusterName'] == resource_id),
+                None,
+            )
+            if not cluster_arn:
+                print(f"   Warning: Kafka cluster ARN not found for {resource_id}")
+                return []
+            nodes = kafka.list_nodes(ClusterArn=cluster_arn).get('NodeInfoList', [])
+            broker_ids = []
+            for n in nodes:
+                broker_info = n.get('BrokerNodeInfo', {})
+                bid = broker_info.get('BrokerId')
+                if bid is not None:
+                    broker_ids.append(str(int(bid)))
+            broker_ids.sort(key=lambda x: int(x))
+            print(f"   Discovered Kafka brokers for {resource_id}: {broker_ids}")
+            return broker_ids
+        except Exception as e:
+            print(f"   Warning: failed to discover Kafka brokers for {resource_id}: {e}")
+            return []
+
+    if service == 'docdb':
+        try:
+            docdb = boto3.client('docdb', region_name=region)
+            clusters = docdb.describe_db_clusters(
+                DBClusterIdentifier=resource_id
+            ).get('DBClusters', [])
+            if not clusters:
+                return []
+            instance_ids = [
+                m['DBInstanceIdentifier']
+                for m in clusters[0].get('DBClusterMembers', [])
+            ]
+            print(f"   Discovered DocDB instances for {resource_id}: {instance_ids}")
+            return instance_ids
+        except Exception as e:
+            print(f"   Warning: failed to discover DocDB instances for {resource_id}: {e}")
+            return []
+
+    return []
+
+
+def _count_alarms(service_config: dict, resources_with_subs: Dict[str, List[str]]) -> int:
+    """Mirror the generator's fanout logic for pre-flight alarm counting."""
+    count = 0
+    for _resource_id, subs in resources_with_subs.items():
+        for alarm_cfg in service_config['alarms']:
+            scope = alarm_cfg.get('scope', 'cluster')
+            if scope == 'cluster' or not subs:
+                count += 1
+            else:
+                count += len(subs)
+    return count
+
+
+def generate_resource_based_template(service: str, resources_with_subs: Dict[str, List[str]],
+                                     tag_value: str) -> str:
+    """Generate CloudFormation template for resource-based alarms.
+
+    resources_with_subs: {resource_id: [sub_resource, ...]}
+        Sub-resources are only used for services with scope=broker/instance metrics
+        (Kafka, DocDB). Other services pass [] as the sub list.
+    """
     print(f"🔧 Generating template for {service}...")
-    
-    # Use simple YAML generator (no CDK required)
+
+    # Encode sub-resources into the generator's 'ID:sub1,sub2' format.
+    resource_args = []
+    for resource_id, subs in resources_with_subs.items():
+        if subs:
+            resource_args.append(f"{resource_id}:{','.join(subs)}")
+        else:
+            resource_args.append(resource_id)
+
     cmd = [
-        'python', 'generate-resource-alarms.py',
+        sys.executable, 'generate-resource-alarms.py',
         '--service', service,
         '--tag-value', tag_value,
-        '--resources'] + resource_ids
-    
+        '--resources', *resource_args,
+    ]
+
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         print(f"   Template generated successfully")
-        
-        # Read generated template
         template_file = f'cloudformation-{service}-alarms-generated.yaml'
         with open(template_file, 'r', encoding='utf-8', errors='ignore') as f:
             return f.read()
-    
     except subprocess.CalledProcessError as e:
         print(f"✗ Template generation failed: {e.stderr}")
         raise
@@ -516,14 +593,22 @@ def deploy_resource_based_alarms(service: str, resource_ids: List[str],
     print(f"   Resources: {len(resource_ids)}")
     
     try:
-        # Generate template
-        template_body = generate_resource_based_template(service, resource_ids, tag_value)
-        
-        # Load service config to get alarm count
+        # Load service config once (used for alarm count + fanout discovery).
         with open('alarm-config-resource-based.yaml', 'r', encoding='utf-8', errors='ignore') as f:
             config = yaml.safe_load(f)
-        alarm_count = len(resource_ids) * len(config['services'][service]['alarms'])
-        
+        service_config = config['services'][service]
+
+        # Discover sub-resources (broker IDs / DB instance IDs) for services
+        # whose metrics require a second dimension (Kafka, DocDB).
+        resources_with_subs: Dict[str, List[str]] = {}
+        for rid in resource_ids:
+            resources_with_subs[rid] = discover_sub_resources(service, rid, region)
+
+        # Generate template with fan-out.
+        template_body = generate_resource_based_template(service, resources_with_subs, tag_value)
+
+        alarm_count = _count_alarms(service_config, resources_with_subs)
+
         # Check CloudFormation limit
         if alarm_count > 500:
             raise ValueError(
