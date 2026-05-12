@@ -198,6 +198,38 @@ python deploy_alarms.py --mode resource-based \
   --region us-east-1
 ```
 
+Manually specify connection(s) — bandwidth is auto-detected via `describe_connections`, or pass `--bandwidth` explicitly:
+
+```bash
+python deploy_alarms.py --mode resource-based \
+  --service directconnect \
+  --tag-key Environment --tag-value Production \
+  --resources dxcon-abc123 \
+  --bandwidth 10Gbps \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
+#### NLB
+
+```bash
+python deploy_alarms.py --mode resource-based \
+  --service nlb \
+  --tag-key Environment --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
+#### EFS
+
+```bash
+python deploy_alarms.py --mode resource-based \
+  --service efs \
+  --tag-key Environment --tag-value Production \
+  --sns-topic arn:aws:sns:us-east-1:YOUR_ACCOUNT:cloudwatchTopic \
+  --region us-east-1
+```
+
 ---
 
 ## 🎯 How It Works

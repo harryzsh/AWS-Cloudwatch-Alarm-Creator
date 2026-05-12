@@ -26,7 +26,7 @@ class _NoAliasDumper(yaml.SafeDumper):
 # Tag-based: EC2, NAT Gateway, VPN (deployed via cloudformation-tag-based-alarms.yaml)
 # Resource-based: Kafka, ACM, ALB, Direct Connect (generated per-resource by resource_alarm_builder)
 TAG_BASED_SERVICES = ['ec2', 'nat-gateway', 'vpn']
-RESOURCE_BASED_SERVICES = ['ec2', 'kafka', 'acm', 'alb', 'directconnect', 'ebs', 'bedrock']
+RESOURCE_BASED_SERVICES = ['ec2', 'kafka', 'acm', 'alb', 'nlb', 'directconnect', 'ebs', 'efs', 'bedrock']
 
 # ANSI color codes for terminal output
 RED = '\033[91m'
@@ -297,48 +297,80 @@ def parse_dx_bandwidth(bandwidth_str: str) -> int:
         raise ValueError(f"Cannot parse bandwidth: '{bandwidth_str}'. Expected format like '1Gbps' or '100Mbps'")
 
 
-def discover_alb_load_balancers(region: str, tag_key: str, tag_value: str) -> List[str]:
-    """Discover ALB load balancers filtered by tags"""
-    
-    print(f"🔍 Discovering ALB load balancers with tag {tag_key}={tag_value} in {region}...")
-    
+def _discover_elbv2_load_balancers(region: str, tag_key: str, tag_value: str, lb_type: str) -> List[str]:
+    """Discover ELBv2 load balancers of a specific type ('application' or 'network'), filtered by tags."""
+
+    label = 'ALB' if lb_type == 'application' else 'NLB'
+    print(f"🔍 Discovering {label} load balancers with tag {tag_key}={tag_value} in {region}...")
+
     try:
         client = boto3.client('elbv2', region_name=region)
-        
+
         paginator = client.get_paginator('describe_load_balancers')
         all_lbs = []
         for page in paginator.paginate():
             all_lbs.extend(page.get('LoadBalancers', []))
-        
-        # Filter to ALBs only and get their ARNs
-        alb_arns = [lb['LoadBalancerArn'] for lb in all_lbs if lb.get('Type') == 'application']
-        
-        if not alb_arns:
-            print(f"   Found 0 ALB load balancer(s)")
+
+        lb_arns = [lb['LoadBalancerArn'] for lb in all_lbs if lb.get('Type') == lb_type]
+
+        if not lb_arns:
+            print(f"   Found 0 {label} load balancer(s)")
             return []
-        
-        # Get tags for ALBs (up to 20 at a time)
+
         filtered_lbs = []
-        for i in range(0, len(alb_arns), 20):
-            batch = alb_arns[i:i+20]
+        for i in range(0, len(lb_arns), 20):
+            batch = lb_arns[i:i+20]
             tags_response = client.describe_tags(ResourceArns=batch)
             for desc in tags_response.get('TagDescriptions', []):
                 tags = {t['Key']: t['Value'] for t in desc.get('Tags', [])}
                 if tags.get(tag_key) == tag_value:
-                    # Extract the ALB identifier (app/name/id) from the ARN
                     arn = desc['ResourceArn']
-                    # Format: arn:aws:elasticloadbalancing:region:account:loadbalancer/app/name/id
+                    # Format: arn:aws:elasticloadbalancing:region:account:loadbalancer/<type-prefix>/name/id
                     parts = arn.split('loadbalancer/')
                     if len(parts) == 2:
                         filtered_lbs.append(parts[1])
                     else:
                         filtered_lbs.append(arn)
-        
-        print(f"   Found {len(filtered_lbs)} ALB load balancer(s) with tag {tag_key}={tag_value}")
+
+        print(f"   Found {len(filtered_lbs)} {label} load balancer(s) with tag {tag_key}={tag_value}")
         return filtered_lbs
-    
+
     except Exception as e:
-        print(f"✗ Error discovering ALB load balancers: {e}")
+        print(f"✗ Error discovering {label} load balancers: {e}")
+        return []
+
+
+def discover_alb_load_balancers(region: str, tag_key: str, tag_value: str) -> List[str]:
+    """Discover ALB (application) load balancers filtered by tags."""
+    return _discover_elbv2_load_balancers(region, tag_key, tag_value, 'application')
+
+
+def discover_nlb_load_balancers(region: str, tag_key: str, tag_value: str) -> List[str]:
+    """Discover NLB (network) load balancers filtered by tags."""
+    return _discover_elbv2_load_balancers(region, tag_key, tag_value, 'network')
+
+
+def discover_efs_filesystems(region: str, tag_key: str, tag_value: str) -> List[str]:
+    """Discover EFS file systems filtered by tags."""
+
+    print(f"🔍 Discovering EFS file systems with tag {tag_key}={tag_value} in {region}...")
+
+    try:
+        client = boto3.client('efs', region_name=region)
+
+        paginator = client.get_paginator('describe_file_systems')
+        filtered_fs = []
+        for page in paginator.paginate():
+            for fs in page.get('FileSystems', []):
+                tags = {t['Key']: t['Value'] for t in fs.get('Tags', [])}
+                if tags.get(tag_key) == tag_value:
+                    filtered_fs.append(fs['FileSystemId'])
+
+        print(f"   Found {len(filtered_fs)} EFS file system(s) with tag {tag_key}={tag_value}")
+        return filtered_fs
+
+    except Exception as e:
+        print(f"✗ Error discovering EFS file systems: {e}")
         return []
 
 
@@ -513,16 +545,20 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str):
             return discover_ec2_instances(region, tag_key, tag_value)        
         elif service == 'kafka':
             client = boto3.client('kafka', region_name=region)
-            response = client.list_clusters()
-            all_clusters = response['ClusterInfoList']
-            
+            # list_clusters (v1) returns only PROVISIONED clusters — Serverless is intentionally excluded.
+            # Paginate to handle accounts with >100 clusters.
+            paginator = client.get_paginator('list_clusters')
+            all_clusters = []
+            for page in paginator.paginate():
+                all_clusters.extend(page.get('ClusterInfoList', []))
+
             # Filter by tags
             filtered_clusters = []
             for cluster in all_clusters:
                 tags = cluster.get('Tags', {})
                 if tags.get(tag_key) == tag_value:
                     filtered_clusters.append(cluster['ClusterName'])
-            
+
             resources = filtered_clusters
             print(f"   Found {len(resources)} {service} resource(s) with tag {tag_key}={tag_value}")
             return resources
@@ -532,10 +568,16 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str):
         
         elif service == 'alb':
             return discover_alb_load_balancers(region, tag_key, tag_value)
-        
+
+        elif service == 'nlb':
+            return discover_nlb_load_balancers(region, tag_key, tag_value)
+
+        elif service == 'efs':
+            return discover_efs_filesystems(region, tag_key, tag_value)
+
         elif service == 'directconnect':
             return discover_dx_connections(region, tag_key, tag_value)
-        
+
         elif service == 'ebs':
             return discover_ebs_volumes(region, tag_key, tag_value)
         
@@ -547,41 +589,44 @@ def discover_resources(service: str, region: str, tag_key: str, tag_value: str):
         return []
 
 
-def generate_resource_based_template(service: str, resource_ids: List[str], tag_value: str, bandwidth: int = None) -> str:
-    """Generate CloudFormation template for resource-based alarms"""
-    
+def generate_resource_based_template(service: str, resource_ids: List[str], tag_value: str, bandwidth: int = None):
+    """Generate CloudFormation template for resource-based alarms.
+
+    Returns (template_body_yaml, alarm_count) tuple so callers can use the
+    exact number of alarms actually generated (dual-threshold configs emit 2
+    alarms each, so multiplying config entries × resources under-counts).
+    """
     print(f"🔧 Generating template for {service}...")
-    
+
     template_dict = resource_alarm_builder.build_template(service, resource_ids, tag_value, bandwidth)
     template_body = yaml.dump(template_dict, default_flow_style=False, allow_unicode=True, sort_keys=False, Dumper=_NoAliasDumper)
-    
+
     alarm_count = len(template_dict['Resources'])
     print(f"   Template generated: {alarm_count} alarm(s) for {len(resource_ids)} resource(s)")
-    
-    return template_body
+
+    return template_body, alarm_count
 
 
 def deploy_resource_based_alarms(service: str, resource_ids: List[str], 
                                  sns_topic: str, region: str, tag_value: str,
-                                 bandwidth: int = None) -> DeploymentResult:
+                                 bandwidth: int = None,
+                                 stack_name: str = None) -> DeploymentResult:
     """Deploy resource-based alarms for a service"""
     
     cfn = boto3.client('cloudformation', region_name=region)
-    stack_name = f'{service}-alarms'
+    if not stack_name:
+        stack_name = f'{service}-alarms'
     
     print(f"📦 Deploying {service} alarms...")
     print(f"   Stack: {stack_name}")
     print(f"   Resources: {len(resource_ids)}")
     
     try:
-        # Generate template
-        template_body = generate_resource_based_template(service, resource_ids, tag_value, bandwidth)
-        
-        # Load service config to get alarm count
-        with open('alarm-config-resource-based.yaml', 'r', encoding='utf-8', errors='ignore') as f:
-            config = yaml.safe_load(f)
-        alarm_count = len(resource_ids) * len(config['services'][service]['alarms'])
-        
+        # Generate template (returns real alarm count — dual-threshold entries emit 2 alarms)
+        template_body, alarm_count = generate_resource_based_template(
+            service, resource_ids, tag_value, bandwidth
+        )
+
         # Check CloudFormation limit
         if alarm_count > 500:
             raise ValueError(
@@ -678,10 +723,12 @@ def deploy_resource_based_alarms(service: str, resource_ids: List[str],
         )
 
 
-def deploy_bedrock_alarms(sns_topic: str, region: str, tag_value: str) -> DeploymentResult:
+def deploy_bedrock_alarms(sns_topic: str, region: str, tag_value: str,
+                          stack_name: str = None) -> DeploymentResult:
     """Deploy Bedrock CloudWatch alarms (auto-discover + yaml overrides)."""
     cfn = boto3.client('cloudformation', region_name=region)
-    stack_name = 'bedrock-alarms'
+    if not stack_name:
+        stack_name = 'bedrock-alarms'
 
     print(f"📦 Deploying Bedrock alarms...")
     print(f"   Stack: {stack_name}")
@@ -782,6 +829,10 @@ Examples:
                         help='Tag value to filter resources (REQUIRED)')
     parser.add_argument('--resources', nargs='+',
                         help='List of resource IDs for resource-based mode')
+    parser.add_argument('--bandwidth',
+                        help='Direct Connect bandwidth (e.g., "1Gbps", "10Gbps"). '
+                             'Required only for --service directconnect with --resources. '
+                             'Auto-detected when discovering by tag.')
 
     parser.add_argument('--region', default='us-east-1',
                         help='AWS region (default: us-east-1)')
@@ -800,6 +851,13 @@ Examples:
         if not args.service:
             parser.error("--service is required for resource-based mode")
         # Manual resource list is optional (for override)
+
+    if args.stack_name and args.mode == 'all':
+        parser.error(
+            "--stack-name cannot be used with --mode all "
+            "(would cause multiple services to share one CloudFormation stack name). "
+            "Use it with --mode tag-based or --mode resource-based --service <one>."
+        )
     
     print("🚀 CloudWatch Alarms Deployment")
     print(f"   Mode: {args.mode}")
@@ -836,13 +894,46 @@ Examples:
     elif args.mode == 'resource-based':
         # Bedrock has its own discovery logic
         if args.service == 'bedrock':
-            result = deploy_bedrock_alarms(args.sns_topic, args.region, args.tag_value)
+            result = deploy_bedrock_alarms(args.sns_topic, args.region, args.tag_value,
+                                           stack_name=args.stack_name)
             results.append(result)
         # Get resource IDs via tag-based discovery or manual list
-        elif args.resources:            # Manual override - use specified resources
+        elif args.resources:
+            # Manual override — use specified resources
             resource_ids = args.resources
             print(f"   Using manually specified resources: {', '.join(resource_ids)}")
             bandwidth = None
+
+            # Direct Connect needs bandwidth for math expressions.
+            # Prefer --bandwidth flag; otherwise auto-detect via describe_connections.
+            if args.service == 'directconnect':
+                if args.bandwidth:
+                    bandwidth = parse_dx_bandwidth(args.bandwidth)
+                    print(f"   Using bandwidth from --bandwidth: {bandwidth:,} bps")
+                else:
+                    try:
+                        dx = boto3.client('directconnect', region_name=args.region)
+                        detected = {c['connectionId']: c.get('bandwidth') for c in dx.describe_connections().get('connections', [])}
+                        missing = [r for r in resource_ids if r not in detected]
+                        if missing:
+                            parser.error(
+                                f"Direct Connect connection(s) not found in {args.region}: {', '.join(missing)}. "
+                                f"Check the connection ID(s) or pass --bandwidth explicitly."
+                            )
+                        # Use the first connection's bandwidth (DX math expressions take a single bandwidth parameter)
+                        first_bw = detected[resource_ids[0]]
+                        bandwidth = parse_dx_bandwidth(first_bw)
+                        print(f"   Auto-detected bandwidth for {resource_ids[0]}: {first_bw} ({bandwidth:,} bps)")
+                        if len(resource_ids) > 1:
+                            distinct = {detected[r] for r in resource_ids}
+                            if len(distinct) > 1:
+                                print(f"   ⚠ Connections have differing bandwidths {distinct}; "
+                                      f"using {first_bw} for all. Deploy each in a separate stack if percentages need to be accurate.")
+                    except Exception as e:
+                        parser.error(
+                            f"Could not auto-detect Direct Connect bandwidth: {e}. "
+                            f"Pass --bandwidth (e.g., --bandwidth 1Gbps)."
+                        )
         else:
             # Tag-based discovery (default)
             discovered = discover_resources(args.service, args.region, args.tag_key, args.tag_value)
@@ -867,7 +958,8 @@ Examples:
                     args.sns_topic,
                     args.region,
                     args.tag_value,
-                    bandwidth
+                    bandwidth,
+                    stack_name=args.stack_name
                 )
                 results.append(result)
 

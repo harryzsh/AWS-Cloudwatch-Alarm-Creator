@@ -47,7 +47,9 @@ def _get_thresholds(alarm_config):
     warning = alarm_config.get('threshold_warning', alarm_config.get('threshold'))
     critical = alarm_config.get('threshold_critical')
 
-    tiers = [(warning, 'WARNING')]
+    tiers = []
+    if warning is not None:
+        tiers.append((warning, 'WARNING'))
     if critical is not None:
         tiers.append((critical, 'CRITICAL'))
     return tiers
